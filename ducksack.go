@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"log"
 	"runtime"
@@ -167,6 +168,45 @@ func mustSelect[T any](ds *Ducksack, query string, args ...any) []T {
 	return data
 }
 
+func (vec Vector) Value() (driver.Value, error) {
+	if len(vec) == 0 {
+		return driver.Value(nil), fmt.Errorf("vector cannot be nil or empty")
+	}
+	bytes, err := json.Marshal(vec)
+	noerror(err)
+	return driver.Value(string(bytes)), nil
+}
+
+func (vec *Vector) Scan(value interface{}) error {
+	if value == nil {
+		return fmt.Errorf("value cannot be nil")
+	}
+	switch value := value.(type) {
+	case []interface{}:
+		converted := make([]float32, len(value))
+		for i, val := range value {
+			converted[i] = val.(float32)
+		}
+		*vec = converted
+	case []float32:
+		*vec = value
+		return nil
+	case []float64:
+	case []int:
+		converted := make([]float32, len(value))
+		for i, val := range value {
+			converted[i] = float32(val)
+		}
+		*vec = converted
+	case []byte:
+	case string:
+		return json.Unmarshal([]byte(value), vec)
+	default:
+		return fmt.Errorf("unsupported type: %T", value)
+	}
+	return nil
+}
+
 func (ds *Ducksack) Exists(urls []string) []string {
 	query, args := mustIn("SELECT url FROM beans WHERE url IN (?)", urls)
 	return mustSelect[string](ds, query, args...)
@@ -177,10 +217,20 @@ func (ds *Ducksack) QueryBeans(urls []string) []Bean {
 	return mustSelect[Bean](ds, query, args...)
 }
 
-// func (ds *Ducksack) QueryTags(ids []string, tag_table string) []TagData {
-// 	query, args := mustIn(fmt.Sprintf("SELECT * FROM %s WHERE id IN (?)", tag_table), ids)
-// 	return mustSelect[TagData](ds, query, args...)
-// }
+func (ds *Ducksack) QueryBeanEmbeddings(urls []string) []EmbeddingData {
+	query, args := mustIn("SELECT * FROM bean_embeddings WHERE url IN (?)", urls)
+	return mustSelect[EmbeddingData](ds, query, args...)
+}
+
+const _SQL_VECTOR_SEARCH_BEANS = `
+SELECT * FROM bean_embeddings
+ORDER BY array_cosine_distance(embedding, ?::FLOAT[384])
+LIMIT ?
+`
+
+func (ds *Ducksack) VectorSearchBeans(embedding Vector, limit int) []EmbeddingData {
+	return mustSelect[EmbeddingData](ds, _SQL_VECTOR_SEARCH_BEANS, embedding, limit)
+}
 
 func (ds *Ducksack) QueryChatters(urls []string) []Chatter {
 	query, args := mustIn("SELECT * FROM chatters WHERE bean_url IN (?) ORDER BY collected DESC", urls)

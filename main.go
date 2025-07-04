@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/k0kubun/pp"
+	datautils "github.com/soumitsalman/data-utils"
 )
 
 func flattenTags(url string, data []string) []TagData {
@@ -107,6 +108,7 @@ func main() {
 	// pp.Println(entities)
 
 	urls := []string{
+		"https://www.slashgear.com/1896648/lifesaber-emergency-tool-usb-powered-features/",
 		"https://issuepay.app",
 		"https://jameshard.ing/pilot",
 		"https://jobsbyreferral.com/",
@@ -114,7 +116,17 @@ func main() {
 		"https://htmlrev.com/",
 	}
 
-	pp.Println("CHATTERS", ds.QueryChatters(urls)[:5])
-	pp.Println("AGGREGATES", ds.QueryChatterAggregates(urls))
-	pp.Println("UPDATES", ds.QueryChatterUpdates(urls, 1))
+	embeddings := ds.QueryBeanEmbeddings(urls)
+	for _, embedding := range embeddings {
+		// pp.Println(embedding.URL, embedding.Embedding)
+
+		similars := ds.VectorSearchBeans(embedding.Embedding, 5)
+		pp.Println(embedding.URL, datautils.Transform(similars, func(s *EmbeddingData) string {
+			return s.URL
+		}))
+	}
+
+	// pp.Println("CHATTERS", ds.QueryChatters(urls)[:5])
+	// pp.Println("AGGREGATES", ds.QueryChatterAggregates(urls))
+	// pp.Println("UPDATES", ds.QueryChatterUpdates(urls, 1))
 }

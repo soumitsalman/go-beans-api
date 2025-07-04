@@ -12,9 +12,11 @@ const (
 	COMMENT   = "comment"
 )
 
+type Vector []float32
+
 type EmbeddingData struct {
-	URL       string    `db:"url" bson:"url"`
-	Embedding []float32 `db:"embedding" bson:"embedding"`
+	URL       string `db:"url" bson:"url"`
+	Embedding Vector `db:"embedding" bson:"embedding"`
 }
 
 type TagData struct {
@@ -36,6 +38,11 @@ type Bean struct {
 	Created       time.Time `db:"created" bson:"created"`
 	Updated       time.Time `db:"updated" bson:"updated"`
 	Collected     time.Time `db:"collected" bson:"collected"`
+}
+
+type AggregatedBean struct {
+	Bean
+	EmbeddingData
 }
 
 type GeneratedBean struct {
