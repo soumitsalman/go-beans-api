@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/k0kubun/pp"
-	datautils "github.com/soumitsalman/data-utils"
 )
 
 func flattenTags(url string, data []string) []TagData {
@@ -40,7 +39,7 @@ func main() {
 	init, err := os.ReadFile("./factory/init.sql")
 	noerror(err)
 	dim := 384
-	dbpath := ".cache/test.db"
+	dbpath := "" // ".cache/test.db"
 	initsql := fmt.Sprintf(string(init), dim, dim, "./factory/categories.parquet", dim, "./factory/sentiments.parquet")
 
 	ds := NewDucksack(dbpath, initsql, dim)
@@ -109,6 +108,7 @@ func main() {
 
 	urls := []string{
 		"https://www.slashgear.com/1896648/lifesaber-emergency-tool-usb-powered-features/",
+		"https://www.wusa9.com/article/news/nation-world/trump-big-bill-may-have-political-cost/507-0c07fc4b-248b-4a3b-96c0-81d75a511228",
 		"https://issuepay.app",
 		"https://jameshard.ing/pilot",
 		"https://jobsbyreferral.com/",
@@ -116,17 +116,22 @@ func main() {
 		"https://htmlrev.com/",
 	}
 
-	embeddings := ds.QueryBeanEmbeddings(urls)
-	for _, embedding := range embeddings {
-		// pp.Println(embedding.URL, embedding.Embedding)
+	// embeddings := ds.QueryBeanEmbeddings(urls)
+	// for _, embedding := range embeddings {
+	// 	// pp.Println(embedding.URL, embedding.Embedding)
 
-		similars := ds.VectorSearchBeans(embedding.Embedding, 5)
-		pp.Println(embedding.URL, datautils.Transform(similars, func(s *EmbeddingData) string {
-			return s.URL
-		}))
-	}
+	// 	similars := ds.VectorSearchBeans(embedding.Embedding, 5)
+	// 	pp.Println(embedding.URL, datautils.Transform(similars, func(s *EmbeddingData) string {
+	// 		res, err := json.MarshalIndent(s, "", "  ")
+	// 		noerror(err)
+	// 		return string(res)
+	// 	}))
+	// }
 
 	// pp.Println("CHATTERS", ds.QueryChatters(urls)[:5])
 	// pp.Println("AGGREGATES", ds.QueryChatterAggregates(urls))
 	// pp.Println("UPDATES", ds.QueryChatterUpdates(urls, 1))
+
+	pp.Println("CATEGORY MATCHES", ds.MatchCategories(urls))
+	pp.Println("SENTIMENT MATCHES", ds.MatchSentiments(urls))
 }

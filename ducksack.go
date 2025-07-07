@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"log"
 	"runtime"
@@ -168,45 +167,6 @@ func mustSelect[T any](ds *Ducksack, query string, args ...any) []T {
 	return data
 }
 
-func (vec Vector) Value() (driver.Value, error) {
-	if len(vec) == 0 {
-		return driver.Value(nil), fmt.Errorf("vector cannot be nil or empty")
-	}
-	bytes, err := json.Marshal(vec)
-	noerror(err)
-	return driver.Value(string(bytes)), nil
-}
-
-func (vec *Vector) Scan(value interface{}) error {
-	if value == nil {
-		return fmt.Errorf("value cannot be nil")
-	}
-	switch value := value.(type) {
-	case []interface{}:
-		converted := make([]float32, len(value))
-		for i, val := range value {
-			converted[i] = val.(float32)
-		}
-		*vec = converted
-	case []float32:
-		*vec = value
-		return nil
-	case []float64:
-	case []int:
-		converted := make([]float32, len(value))
-		for i, val := range value {
-			converted[i] = float32(val)
-		}
-		*vec = converted
-	case []byte:
-	case string:
-		return json.Unmarshal([]byte(value), vec)
-	default:
-		return fmt.Errorf("unsupported type: %T", value)
-	}
-	return nil
-}
-
 func (ds *Ducksack) Exists(urls []string) []string {
 	query, args := mustIn("SELECT url FROM beans WHERE url IN (?)", urls)
 	return mustSelect[string](ds, query, args...)
@@ -224,12 +184,17 @@ func (ds *Ducksack) QueryBeanEmbeddings(urls []string) []EmbeddingData {
 
 const _SQL_VECTOR_SEARCH_BEANS = `
 SELECT * FROM bean_embeddings
-ORDER BY array_cosine_distance(embedding, ?::FLOAT[384])
+ORDER BY array_cosine_distance(embedding, ?::FLOAT[%d])
 LIMIT ?
 `
 
-func (ds *Ducksack) VectorSearchBeans(embedding Vector, limit int) []EmbeddingData {
-	return mustSelect[EmbeddingData](ds, _SQL_VECTOR_SEARCH_BEANS, embedding, limit)
+func (ds *Ducksack) VectorSearchBeans(embedding []float32, limit int) []EmbeddingData {
+	return mustSelect[EmbeddingData](
+		ds,
+		fmt.Sprintf(_SQL_VECTOR_SEARCH_BEANS, len(embedding)),
+		Vector(embedding),
+		limit,
+	)
 }
 
 func (ds *Ducksack) QueryChatters(urls []string) []Chatter {
@@ -237,31 +202,9 @@ func (ds *Ducksack) QueryChatters(urls []string) []Chatter {
 	return mustSelect[Chatter](ds, query, args...)
 }
 
-const _SQL_QUERY_CHATTER_AGGREGATES = `
-SELECT 
-	bean_url as url,
-	MAX(collected) as last_collected,
-    SUM(likes) as total_likes, 
-    SUM(comments) as total_comments, 
-	SUM(subscribers) as total_subscribers,
-	COUNT(chatter_url) as total_shares
-FROM(
-    SELECT chatter_url,
-        FIRST(bean_url) as bean_url, 
-        MAX(collected) as collected, 
-        MAX(likes) as likes, 
-        MAX(comments) as comments,
-		MAX(subscribers) as subscribers
-    FROM chatters 
-	WHERE bean_url IN (?)
-    GROUP BY chatter_url
-) 
-GROUP BY bean_url
-`
-
-func (ds *Ducksack) QueryChatterAggregates(urls []string) []AggregatedChatter {
-	query, args := mustIn(_SQL_QUERY_CHATTER_AGGREGATES, urls)
-	return mustSelect[AggregatedChatter](ds, query, args...)
+func (ds *Ducksack) QueryChatterAggregates(urls []string) []ChatterAggregate {
+	query, args := mustIn("SELECT * FROM chatter_aggregates WHERE url IN (?)", urls)
+	return mustSelect[ChatterAggregate](ds, query, args...)
 }
 
 // first take the chatters ONLY for the filtered urls
@@ -315,7 +258,7 @@ before_agg AS (
 			MAX(comments) as comments,
 			MAX(subscribers) as subscribers
 		FROM filtered_chatters
-		WHERE collected + INTERVAL %d DAY < CURRENT_TIMESTAMP
+		WHERE collected + INTERVAL 1 DAY < CURRENT_TIMESTAMP
 		GROUP BY chatter_url
 	)
     GROUP BY bean_url
@@ -335,135 +278,41 @@ WHERE
 	(total_likes > 0 OR total_comments > 0 OR total_subscribers > 0 OR total_shares > 0);
 `
 
-func (ds *Ducksack) QueryChatterUpdates(urls []string, interval int) []AggregatedChatter {
-	query, args := mustIn(fmt.Sprintf(_SQL_QUERY_CHATTER_UPDATES, interval), urls)
-	return mustSelect[AggregatedChatter](ds, query, args...)
-
-	// rows, err := ds.db.Query(_SQL_QUERY_CHATTER_UPDATES)
-	// noerror(err)
-	// defer rows.Close()
-
-	// var chatters []Chatter
-	// for rows.Next() {
-	// 	var chatter Chatter
-	// 	err = rows.Scan(&chatter.BeanURL, &chatter.Collected, &chatter.Likes, &chatter.Comments, &chatter.Subscribers, &chatter.Shares)
-	// 	noerror(err)
-	// 	chatters = append(chatters, chatter)
-	// }
-	// return chatters
+func (ds *Ducksack) QueryChatterUpdates(urls []string) []ChatterAggregate {
+	query, args := mustIn(_SQL_QUERY_CHATTER_UPDATES, urls)
+	return mustSelect[ChatterAggregate](ds, query, args...)
 }
-
-// func (ds *Ducksack) QueryCategories(ids []string, limit int) [][]string {
-// 	query := fmt.Sprintf(`
-// 		SELECT id FROM categories
-// 		ORDER BY array_cosine_distance(
-// 			embedding::FLOAT[%d],
-// 			(SELECT embedding::FLOAT[%d] FROM bean_embeddings WHERE id = ?)
-// 		)
-// 		LIMIT ?`,
-// 		ds.vectordim, ds.vectordim)
-
-// 	stmt, err := ds.query.Preparex(query)
-// 	checkerr(err)
-
-// 	var results [][]string = make([][]string, 0, len(ids))
-// 	for _, id := range ids {
-// 		var categories []string
-// 		checkerr(stmt.Select(&categories, id, limit))
-// 		results = append(results, categories)
-// 	}
-// 	return results
-// }
-
-// func (ds *Ducksack) BatchQueryCategories(ids []string) []Classification {
-// 	query := fmt.Sprintf(`
-// 		WITH filtered_beans AS (
-// 			SELECT * FROM bean_embeddings WHERE id IN (?)
-// 		),
-// 		category_matches AS (
-// 			SELECT
-// 				b.id as bean_id,
-// 				c.id as category_id,
-// 				array_cosine_distance(b.embedding::FLOAT[%d], c.embedding::FLOAT[%d]) as distance
-// 			FROM filtered_beans b CROSS JOIN categories c
-// 		)
-// 		SELECT
-// 			bean_id as id,
-// 			LIST(category_id ORDER BY distance)[1:3] as categories
-// 		FROM category_matches
-// 		GROUP BY id;`,
-// 		ds.vectordim, ds.vectordim)
-
-// 	query, args, err := sqlx.In(query, ids)
-// 	checkerr(err)
-// 	var results []map[string]any
-// 	checkerr(ds.query.Select(&results, query, args...))
-// 	return datautils.Transform(results, unmarshalClassification)
-// }
-
-// func (ds *Ducksack) BatchQuerySentiments(ids []string) []Classification {
-// 	query := fmt.Sprintf(`
-// 		WITH filtered_beans AS (
-// 			SELECT * FROM bean_embeddings WHERE id IN (?)
-// 		),
-// 		sentiment_matches AS (
-// 			SELECT
-// 				b.id as bean_id,
-// 				s.id as sentiment_id,
-// 				array_cosine_distance(b.embedding::FLOAT[%d], s.embedding::FLOAT[%d]) as distance
-// 			FROM filtered_beans b CROSS JOIN sentiments s
-// 		)
-// 		SELECT
-// 			bean_id as id,
-// 			LIST(sentiment_id ORDER BY distance)[1:3] as sentiments
-// 		FROM sentiment_matches
-// 		GROUP BY id;`,
-// 		ds.vectordim, ds.vectordim)
-
-// 	query, args, err := sqlx.In(query, ids)
-// 	checkerr(err)
-// 	var results []map[string]any
-// 	checkerr(ds.query.Select(&results, query, args...))
-// 	return datautils.Transform(results, unmarshalClassification)
-// }
 
 ////////// QUERY WITH FUZZY MATCHING //////////
 
-const _SQL_MATCH_TAGS = `
-WITH 
-	filtered_beans AS (
-		SELECT * FROM bean_embeddings WHERE id IN (?)
-	),
-	tag_matches AS (
-		SELECT b.id as id, t.tag as tag, array_cosine_distance(b.embedding, t.embedding) as distance
-		FROM filtered_beans b CROSS JOIN %s t
-	)
-SELECT id, tag
-FROM tag_matches tm
-WHERE tag IN (
-	SELECT tag FROM tag_matches tm2
-	WHERE tm2.id == tm.id 
-	ORDER BY tm2.distance LIMIT %d
-)
-ORDER BY tm.id, tm.distance;
+const _SQL_MATCH_CATEGORIES = `
+SELECT url, LIST(category) AS categories  
+FROM top3_categories 
+WHERE url IN (?) 
+GROUP BY url;
 `
 
-func (ds *Ducksack) MatchCategories(ids []string, limit int) []TagData {
-	sql := fmt.Sprintf(_SQL_MATCH_TAGS, CATEGORIES, limit)
-	query, args, err := sqlx.In(sql, ids)
+func (ds *Ducksack) MatchCategories(urls []string) []BeanAggregate {
+	query, args, err := sqlx.In(_SQL_MATCH_CATEGORIES, urls)
 	noerror(err)
-	var tags []TagData
-	noerror(ds.query.Select(&tags, query, args...))
-	return tags
+	var categories []BeanAggregate
+	noerror(ds.query.Select(&categories, query, args...))
+	return categories
 }
 
-func (ds *Ducksack) MatchSentiments(ids []string, limit int) []TagData {
-	sql := fmt.Sprintf(_SQL_MATCH_TAGS, SENTIMENTS, limit)
-	query, args, err := sqlx.In(sql, ids)
+const _SQL_MATCH_SENTIMENTS = `
+SELECT url, LIST(sentiment) AS sentiments 
+FROM top3_sentiments 
+WHERE url IN (?) 
+GROUP BY url;
+`
+
+func (ds *Ducksack) MatchSentiments(urls []string) []BeanAggregate {
+	query, args, err := sqlx.In(_SQL_MATCH_SENTIMENTS, urls)
 	noerror(err)
-	var tags []TagData
-	noerror(ds.query.Select(&tags, query, args...))
-	return tags
+	var sentiments []BeanAggregate
+	noerror(ds.query.Select(&sentiments, query, args...))
+	return sentiments
 }
 
 const _SQL_MATCH_CLUSTERS = `

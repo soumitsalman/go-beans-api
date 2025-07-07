@@ -1,6 +1,9 @@
 package main
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -13,10 +16,11 @@ const (
 )
 
 type Vector []float32
+type Tags []string
 
 type EmbeddingData struct {
 	URL       string `db:"url" bson:"url"`
-	Embedding Vector `db:"embedding" bson:"embedding"`
+	Embedding Vector `db:"embedding" bson:"embedding" json:"embedding"`
 }
 
 type TagData struct {
@@ -40,9 +44,16 @@ type Bean struct {
 	Collected     time.Time `db:"collected" bson:"collected"`
 }
 
-type AggregatedBean struct {
+type BeanAggregate struct {
 	Bean
 	EmbeddingData
+	ChatterAggregate
+	Related    Tags   `db:"related"`
+	Categories Tags   `db:"categories"`
+	Sentiments Tags   `db:"sentiments"`
+	Regions    Tags   `db:"regions"`
+	Entities   Tags   `db:"entities"`
+	Gist       string `db:"gist"`
 }
 
 type GeneratedBean struct {
@@ -65,7 +76,7 @@ type Chatter struct {
 	Subscribers int       `db:"subscribers"`
 }
 
-type AggregatedChatter struct {
+type ChatterAggregate struct {
 	URL           string    `db:"url"`            // url of the bean
 	LastCollected time.Time `db:"last_collected"` // last time some chatter was collected
 	Likes         int       `db:"total_likes"`
@@ -81,4 +92,67 @@ type Source struct {
 	DomainName  string `db:"domain_name" bson:"source"`
 	Favicon     string `db:"favicon" bson:"site_favicon"`
 	RSSFeed     string `db:"rss_feed" bson:"site_rss_feed"`
+}
+
+func (vec Tags) Value() (driver.Value, error) {
+	bytes, err := json.Marshal(vec)
+	return driver.Value(string(bytes)), err
+}
+
+func (vec *Tags) Scan(value interface{}) error {
+	if value == nil {
+		return fmt.Errorf("value cannot be nil")
+	}
+	switch value := value.(type) {
+	case []interface{}:
+		converted := make([]string, len(value))
+		for i, val := range value {
+			converted[i] = val.(string)
+		}
+		*vec = converted
+	case []byte:
+	case string:
+		return json.Unmarshal([]byte(value), vec)
+	default:
+		return fmt.Errorf("unsupported type: %T", value)
+	}
+	return nil
+}
+
+func (vec Vector) Value() (driver.Value, error) {
+	if len(vec) == 0 {
+		return driver.Value(nil), fmt.Errorf("vector cannot be nil or empty")
+	}
+	bytes, err := json.Marshal(vec)
+	return driver.Value(string(bytes)), err
+}
+
+func (vec *Vector) Scan(value interface{}) error {
+	if value == nil {
+		return fmt.Errorf("value cannot be nil")
+	}
+	switch value := value.(type) {
+	case []interface{}:
+		converted := make([]float32, len(value))
+		for i, val := range value {
+			converted[i] = val.(float32)
+		}
+		*vec = converted
+	case []float32:
+		*vec = value
+		return nil
+	case []float64:
+	case []int:
+		converted := make([]float32, len(value))
+		for i, val := range value {
+			converted[i] = float32(val)
+		}
+		*vec = converted
+	case []byte:
+	case string:
+		return json.Unmarshal([]byte(value), vec)
+	default:
+		return fmt.Errorf("unsupported type: %T", value)
+	}
+	return nil
 }

@@ -65,6 +65,27 @@ CREATE TABLE IF NOT EXISTS chatters (
     subscribers INTEGER DEFAULT 0
 );
 
+CREATE VIEW IF NOT EXISTS chatter_aggregates AS
+SELECT 
+    bean_url as url,
+    MAX(collected) as last_collected,
+    SUM(likes) as total_likes, 
+    SUM(comments) as total_comments, 
+    SUM(subscribers) as total_subscribers,
+    COUNT(chatter_url) as total_shares
+FROM(
+    SELECT chatter_url,
+        FIRST(bean_url) as bean_url, 
+        MAX(collected) as collected, 
+        MAX(likes) as likes, 
+        MAX(comments) as comments,
+        MAX(subscribers) as subscribers
+    FROM chatters 
+    GROUP BY chatter_url
+) 
+GROUP BY bean_url;
+
+
 CREATE TABLE IF NOT EXISTS sources (
     name VARCHAR,
     description TEXT,
@@ -76,13 +97,44 @@ CREATE TABLE IF NOT EXISTS sources (
 
 CREATE TABLE IF NOT EXISTS categories AS
 SELECT 
-    _id as tag,
+    _id as category,
     embedding::FLOAT[%d] as embedding
 FROM read_parquet('%s');
+
+CREATE VIEW IF NOT EXISTS category_mappings AS
+SELECT 
+    url,
+    category, 
+    array_cosine_distance(b.embedding, c.embedding) as distance
+FROM bean_embeddings b CROSS JOIN categories c;
+
+CREATE VIEW IF NOT EXISTS top3_categories AS
+SELECT m1.url, m1.category FROM category_mappings m1
+WHERE category IN (
+    SELECT category FROM category_mappings m2
+    WHERE m1.url == m2.url
+    ORDER BY m2.distance LIMIT 3
+)
+ORDER BY m1.url, m1.distance;
 
 CREATE TABLE IF NOT EXISTS sentiments AS
 SELECT 
-    _id as tag,
+    _id as sentiment,
     embedding::FLOAT[%d] as embedding
 FROM read_parquet('%s');
 
+CREATE VIEW IF NOT EXISTS sentiment_mappings AS
+SELECT 
+    url,
+    sentiment, 
+    array_cosine_distance(b.embedding, s.embedding) as distance
+FROM bean_embeddings b CROSS JOIN sentiments s;
+
+CREATE VIEW IF NOT EXISTS top3_sentiments AS
+SELECT url, sentiment FROM sentiment_mappings m1
+WHERE sentiment IN (
+    SELECT sentiment FROM sentiment_mappings m2
+    WHERE m1.url == m2.url
+    ORDER BY m2.distance LIMIT 3
+)
+ORDER BY url, distance;
