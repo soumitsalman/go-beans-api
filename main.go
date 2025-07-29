@@ -476,15 +476,16 @@ func testVectorSearch(ds *Ducksack) {
 		-0.036028821021318436,
 		0.04311073198914528,
 	}
-	similars := ds.VectorSearchBeans(query_emb, 0, NEWS, time.Time{}, nil, nil, nil, 0, 5)
+
+	sources := []string{"techstartups", "techradar"}
+
 	datautils.PrintTable(
-		similars,
-		[]string{"kind", "title", "categories", "entities", "created"},
+		ds.VectorSearchBeans(query_emb, 0.25, NEWS, time.Time{}, nil, nil, nil, sources, 0, 5),
+		[]string{"kind", "title", "categories", "entities", "created", "source"},
 		func(b *Bean) []string {
-			return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339)}
+			return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339), b.Source}
 		},
 	)
-
 }
 
 func testQueryBeans(ds *Ducksack) {
@@ -493,10 +494,10 @@ func testQueryBeans(ds *Ducksack) {
 
 	for i := int64(0); i < 3; i++ {
 		datautils.PrintTable(
-			ds.QueryBeans(NEWS, time.Now().AddDate(0, 0, -45), categories, nil, entities, i*5, 6),
-			[]string{"kind", "title", "categories", "entities"},
+			ds.QueryBeans(NEWS, time.Now().AddDate(0, 0, -3), categories, nil, entities, nil, i*5, 6),
+			[]string{"kind", "title", "categories", "entities", "created", "source"},
 			func(b *Bean) []string {
-				return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", ")}
+				return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339), b.Source}
 			},
 		)
 	}
@@ -543,8 +544,8 @@ func main() {
 	// testQueryChatterStats(ds)
 	// testQueryBeanExtensions(ds)
 	// testQueryBeans(ds)
-	// testVectorSearch(ds)
-	testQueryRelated(ds)
+	testVectorSearch(ds)
+	// testQueryRelated(ds)
 
 	// titles := []string{
 	// 	"Synthflow AI is bringing 'conversational' voice agents to call centers. Read the pitch deck that it used to raise $20 million.",

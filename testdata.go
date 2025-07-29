@@ -20,7 +20,9 @@ var ctx = context.Background()
 func hydrateTestDB(ds *Ducksack) {
 	var importnum int64 = 10000
 
-	for i := int64(0); i < 50; i++ {
+	ds.StoreChatters(getTestChatters(0, 400000))
+
+	for i := int64(0); i < 25; i++ {
 		beans := getTestBeans(i*importnum, importnum)
 		ds.StoreBeans(beans)
 		embs := datautils.Filter(beans, func(b *Bean) bool {
@@ -48,7 +50,7 @@ func hydrateTestDB(ds *Ducksack) {
 	}
 
 	// ds.RectifyExtendedFields(beans, 3, 0.43)
-	ds.StoreChatters(getTestChatters(0, 400000))
+
 	// ds.StoreSources(getTestSources(importnum))
 	// digests := getTestDigests(importnum)
 }
@@ -78,6 +80,8 @@ func mongoFind[T any](collection string, filter interface{}, skip int64, limit i
 		projection = map[string]interface{}{}
 	}
 	coll := getMongoCollection(collection)
+	defer coll.Database().Client().Disconnect(ctx)
+
 	find_options := options.Find().SetSkip(skip).SetLimit(limit).SetProjection(projection)
 	cursor, err := coll.Find(ctx, filter, find_options)
 	noerror(err, "MONGO FIND ERROR")
@@ -124,12 +128,9 @@ func getTestBeans(skip int64, limit int64) []Bean {
 			"gist":       1,
 		},
 	)
-	for _, bean := range beans {
-		if len(bean.MongoEmbedding) > 0 {
-			bean.Embedding = make(Float32Array, len(bean.MongoEmbedding))
-			for i, v := range bean.MongoEmbedding {
-				bean.Embedding[i] = float32(v)
-			}
+	for i := range beans {
+		if len(beans[i].MongoEmbedding) > 0 {
+			beans[i].Embedding.Scan(beans[i].MongoEmbedding)
 		}
 	}
 	return beans

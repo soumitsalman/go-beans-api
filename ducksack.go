@@ -355,20 +355,35 @@ func (ds *Ducksack) DistinctSources() []string {
 
 const _SQL_QUERY_BEAN_AGGREGATES = `SELECT * FROM bean_aggregates`
 
-func (ds *Ducksack) QueryBeans(kind string, created_after time.Time, categories []string, regions []string, entities []string, offset int64, limit int64) []Bean {
-	sql, where_params := addWhere(_SQL_QUERY_BEAN_AGGREGATES, kind, created_after, categories, regions, entities, 0)
+func (ds *Ducksack) QueryBeans(
+	kind string,
+	created_after time.Time,
+	categories []string,
+	regions []string,
+	entities []string,
+	sources []string,
+	offset int64, limit int64) []Bean {
+	sql, where_params := addWhere(_SQL_QUERY_BEAN_AGGREGATES, kind, created_after, categories, regions, entities, sources, 0)
 	sql, paging_params := addPagination(sql, offset, limit)
 	return mustSelect[Bean](ds, sql, append(where_params, paging_params...)...)
 }
 
-func (ds *Ducksack) VectorSearchBeans(embedding []float32, max_distance float64, kind string, created_after time.Time, categories []string, regions []string, entities []string, offset int64, limit int64) []Bean {
-	filtered_sql, params := addWhere(_SQL_QUERY_BEAN_AGGREGATES, kind, created_after, categories, regions, entities, 0)
+func (ds *Ducksack) VectorSearchBeans(
+	embedding []float32, max_distance float64,
+	kind string,
+	created_after time.Time,
+	categories []string,
+	regions []string,
+	entities []string,
+	sources []string,
+	offset int64, limit int64) []Bean {
 
+	filtered_sql, params := addWhere(_SQL_QUERY_BEAN_AGGREGATES, kind, created_after, categories, regions, entities, sources, 0)
 	distances_sql := `
 	SELECT *, array_cosine_distance(embedding, ?::FLOAT[%d]) AS distance 
-	FROM filtered
-	ORDER BY distance`
-	distances_sql, distances_where_params := addWhere(fmt.Sprintf(distances_sql, ds.dim), "", time.Time{}, nil, nil, nil, max_distance)
+	FROM filtered`
+	distances_sql, distances_where_params := addWhere(fmt.Sprintf(distances_sql, ds.dim), "", time.Time{}, nil, nil, nil, nil, max_distance)
+	distances_sql = addOrderBy(distances_sql, "distance DESC")
 	distances_sql, distances_pagination_params := addPagination(distances_sql, offset, limit)
 
 	params = append(params, Float32Array(embedding))
@@ -376,16 +391,20 @@ func (ds *Ducksack) VectorSearchBeans(embedding []float32, max_distance float64,
 	params = append(params, distances_pagination_params...)
 
 	sql := `
-	WITH 
-		filtered AS ( %s ),
-		distances AS ( %s )
+	WITH filtered AS ( %s ), distances AS ( %s )
 	SELECT * EXCLUDE(distance) FROM distances;`
-	sql = fmt.Sprintf(sql, filtered_sql, distances_sql)
-
-	return mustSelect[Bean](ds, sql, params...)
+	return mustSelect[Bean](ds, fmt.Sprintf(sql, filtered_sql, distances_sql), params...)
 }
 
-func addWhere(base_sql string, kind string, created_after time.Time, categories []string, regions []string, entities []string, max_distance float64) (string, []any) {
+func addWhere(
+	base_sql string,
+	kind string,
+	created_after time.Time,
+	categories []string,
+	regions []string,
+	entities []string,
+	sources []string,
+	max_distance float64) (string, []any) {
 	params := []any{}
 	where_exprs := []string{}
 
@@ -409,6 +428,10 @@ func addWhere(base_sql string, kind string, created_after time.Time, categories 
 		where_exprs = append(where_exprs, "ARRAY_HAS_ANY(entities, ?)")
 		params = append(params, StringArray(entities))
 	}
+	if len(sources) > 0 {
+		where_exprs = append(where_exprs, "source IN (?)")
+		params = append(params, sources)
+	}
 	if max_distance > 0 {
 		where_exprs = append(where_exprs, "distance <= ?")
 		params = append(params, max_distance)
@@ -417,7 +440,7 @@ func addWhere(base_sql string, kind string, created_after time.Time, categories 
 	if len(where_exprs) > 0 {
 		base_sql = fmt.Sprintf("%s WHERE %s", base_sql, strings.Join(where_exprs, " AND "))
 	}
-	return base_sql, params
+	return mustIn(base_sql, params...)
 }
 
 func addPagination(base_sql string, offset int64, limit int64) (string, []any) {
@@ -431,6 +454,10 @@ func addPagination(base_sql string, offset int64, limit int64) (string, []any) {
 		params = append(params, limit)
 	}
 	return base_sql, params
+}
+
+func addOrderBy(base_sql string, fields ...string) string {
+	return fmt.Sprintf("%s ORDER BY %s", base_sql, strings.Join(fields, ", "))
 }
 
 func (ds *Ducksack) Close() {
