@@ -18,7 +18,7 @@ var SELECT_GISTS = []string{"url", "created", "updated", "gist"}
 var SELECT_EMBEDDINGS = []string{"url", "created", "updated", "embedding"}
 var ORDER_BY_CREATED = []string{"created DESC"}
 var ORDER_BY_DISTANCE = []string{"distance ASC"}
-var ORDER_BY_CHATTERS = []string{"updated DESC", "comments DESC", "likes DESC", "shares DESC"}
+var ORDER_BY_CHATTERS = []string{"DATE(updated) DESC", "comments DESC", "likes DESC", "shares DESC"}
 
 type BeansQueryRequest struct {
 	// these are query params
@@ -61,7 +61,7 @@ func validateBeansQueryRequest(c *gin.Context) {
 	c.Next()
 }
 
-func createLatestBeansHandler(ds *Ducksack) gin.HandlerFunc {
+func createQueryLatestBeansHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		order_by := ORDER_BY_CREATED
@@ -132,13 +132,6 @@ func createSourcesHandler(ds *Ducksack) gin.HandlerFunc {
 	}
 }
 
-func createExistsHandler(ds *Ducksack) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		req := c.MustGet("req").(BeansQueryRequest)
-		c.JSON(http.StatusOK, ds.Exists(req.URLs))
-	}
-}
-
 ////////// SORT BY TRENDING AND GET ALL FIELDS //////////
 
 func validateVectorSearchRequest(c *gin.Context) {
@@ -188,7 +181,7 @@ func createTrendingBeanEmbeddingsHandler(ds *Ducksack) gin.HandlerFunc {
 
 func findBeans(ds *Ducksack, req BeansQueryRequest, order_by []string, fields []string) ([]Bean, error) {
 	if len(req.Embedding) > 0 {
-		return ds.VectorSearchBeanAggregates(
+		return ds.VectorSearchBeansWithSelectFields(
 			req.Embedding,
 			req.MaxDistance,
 			req.Kind,
@@ -203,7 +196,7 @@ func findBeans(ds *Ducksack, req BeansQueryRequest, order_by []string, fields []
 			fields,
 		)
 	} else {
-		return ds.QueryBeanAggregates(
+		return ds.QueryBeansWithSelectFields(
 			req.Kind,
 			req.Since,
 			req.Categories,

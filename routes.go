@@ -36,7 +36,7 @@ func setupRoutes(ds *Ducksack) *gin.Engine {
 	// everything sorted by created_at DESC
 	articles := r.Group("/articles", validateBeansQueryRequest)
 	{
-		articles.GET("/latest", createLatestBeansHandler(ds))
+		articles.GET("/latest", createQueryLatestBeansHandler(ds))
 		articles.GET("/related", createRelatedBeansHandler(ds))
 		articles.GET("/regions", createRegionsHandler(ds))
 		articles.GET("/entities", createEntitiesHandler(ds))
@@ -45,24 +45,24 @@ func setupRoutes(ds *Ducksack) *gin.Engine {
 	}
 
 	// CONTRIBUTOR ENDPOINTS
-	contibutor := r.Group("/", createAuthVerificationHandler("CONTRIBUTOR_KEY"))
+	contributor := r.Group("/", createAuthVerificationHandler("CONTRIBUTOR_KEY"))
 	{
-		contibutor.GET("/beans/missing", createQueryBeansWithMissingTagsHandler(ds))
-		contibutor.POST("/beans", createStoreBeansHandler(ds))
-		contibutor.POST("/beans/embeddings", createStoreEmbeddingsHandler(ds))
-		contibutor.POST("/beans/tags", createStoreTagsHandler(ds))
-		contibutor.POST("/chatters", createStoreChatterHandler(ds))
-		contibutor.POST("/sources", createStoreSourceHandler(ds))
-		contibutor.DELETE("/beans", validateDeleteRequest, createDeleteBeansHandler(ds))
-		contibutor.DELETE("/chatters", validateDeleteRequest, createDeleteChattersHandler(ds))
-		contibutor.DELETE("/sources", validateDeleteRequest, createDeleteSourcesHandler(ds))
+		contributor.GET("/beans/cores", validateFlexibleBeansQueryRequest, createQueryBeanCoresHandler(ds))
+		contributor.GET("/beans/exists", validateBeansQueryRequest, createExistsHandler(ds))
+		contributor.POST("/beans", createStoreBeansHandler(ds))
+		contributor.POST("/beans/embeddings", createStoreEmbeddingsHandler(ds))
+		contributor.POST("/beans/tags", createStoreTagsHandler(ds))
+		contributor.POST("/chatters", createStoreChatterHandler(ds))
+		contributor.POST("/sources", createStoreSourceHandler(ds))
+		contributor.DELETE("/beans", validateDeleteRequest, createDeleteBeansHandler(ds))
+		contributor.DELETE("/chatters", validateDeleteRequest, createDeleteChattersHandler(ds))
+		contributor.DELETE("/sources", validateDeleteRequest, createDeleteSourcesHandler(ds))
 	}
 
 	// REGISTERED APPLICATION ENDPOINTS
 	// everything sorted by trending DESC
 	regapp := r.Group("/", createAuthVerificationHandler("REG_APP_KEY"), validateBeansQueryRequest, validateVectorSearchRequest)
 	{
-		regapp.GET("/beans/exists", createExistsHandler(ds))
 		regapp.GET("/beans/trending", createTrendingBeansHandler(ds))
 		regapp.GET("/beans/trending/gists", createTrendingBeanGistsHandler(ds))
 		regapp.GET("/beans/trending/embeddings", createTrendingBeanEmbeddingsHandler(ds))

@@ -163,13 +163,16 @@ func (ds *Ducksack) StoreBeans(beans []Bean) int {
 }
 
 func (ds *Ducksack) StoreEmbeddings(beans []Bean) int {
+	beans = datautils.Filter(beans, func(bean *Bean) bool {
+		return len(bean.Embedding) > 0
+	})
 	return appendToTable(ds, BEAN_EMBEDDINGS, beans, func(bean Bean) []driver.Value {
 		return []driver.Value{bean.URL, bean.Embedding}
 	})
 }
 
 func flattenTags(url string, data []string) []TagData {
-	return datautils.FilterAndTransform[string, TagData](data, func(tag *string) (bool, TagData) {
+	return datautils.FilterAndTransform(data, func(tag *string) (bool, TagData) {
 		return len(*tag) > 0, TagData{URL: url, Tag: *tag}
 	})
 }
@@ -393,13 +396,13 @@ func (ds *Ducksack) DistinctSources() []string {
 }
 
 // ////////// COMPOSITE QUERIES ///////////
-const _SQL_QUERY_BEAN_AGGREGATES = `
+const _SQL_QUERY_BEANS_SELECT_FIELDS = `
 SELECT %s FROM bean_aggregates
 %s
 %s
 %s;`
 
-func (ds *Ducksack) QueryBeanAggregates(
+func (ds *Ducksack) QueryBeansWithSelectFields(
 	kind string,
 	created_after time.Time,
 	categories []string,
@@ -416,15 +419,12 @@ func (ds *Ducksack) QueryBeanAggregates(
 	order_by_sql := CreateOrderByExprs(order_by...)
 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
 
-	sql := fmt.Sprintf(_SQL_QUERY_BEAN_AGGREGATES, select_fields_sql, where_sql, order_by_sql, paging_sql)
-	sql, params, err := shouldIn(sql, append(where_params, paging_params...)...)
-	if err != nil {
-		return nil, err
-	}
+	sql := fmt.Sprintf(_SQL_QUERY_BEANS_SELECT_FIELDS, select_fields_sql, where_sql, order_by_sql, paging_sql)
+	sql, params := mustIn(sql, append(where_params, paging_params...)...)
 	return shouldSelect[Bean](ds, sql, params...)
 }
 
-func (ds *Ducksack) VectorSearchBeanAggregates(
+func (ds *Ducksack) VectorSearchBeansWithSelectFields(
 	embedding []float32, max_distance float64,
 	kind string,
 	created_after time.Time,
@@ -436,6 +436,10 @@ func (ds *Ducksack) VectorSearchBeanAggregates(
 	offset int64, limit int64,
 	select_fields []string) ([]Bean, error) {
 
+	if len(embedding) == 0 {
+		return nil, errors.New("embedding is required")
+	}
+
 	select_fields_sql := createSelectFields(select_fields...)
 	select_fields_sql = fmt.Sprintf("%s, array_cosine_distance(embedding, ?::FLOAT[%d]) AS distance", select_fields_sql, ds.dim)
 	where_exprs, where_params := CreateWhereExprsForFieldValues(kind, created_after, categories, regions, entities, sources, max_distance)
@@ -443,14 +447,11 @@ func (ds *Ducksack) VectorSearchBeanAggregates(
 	order_by_sql := CreateOrderByExprs(order_by...)
 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
 
-	sql := fmt.Sprintf(_SQL_QUERY_BEAN_AGGREGATES, select_fields_sql, where_sql, order_by_sql, paging_sql)
+	sql := fmt.Sprintf(_SQL_QUERY_BEANS_SELECT_FIELDS, select_fields_sql, where_sql, order_by_sql, paging_sql)
 	params := []any{Float32Array(embedding)}
 	params = append(params, where_params...)
 	params = append(params, paging_params...)
-	sql, params, err := shouldIn(sql, params...)
-	if err != nil {
-		return nil, err
-	}
+	sql, params = mustIn(sql, params...)
 	return shouldSelect[Bean](ds, sql, params...)
 }
 
@@ -468,15 +469,51 @@ func (ds *Ducksack) QueryBeanCores(where []string, order_by []string, offset int
 	return shouldSelect[Bean](ds, sql, paging_params...)
 }
 
+const _SQL_QUERY_BEAN_AGGREGATES = `
+SELECT * FROM bean_aggregates
+%s		
+%s
+%s;`
+
+func (ds *Ducksack) QueryBeanAggregates(where []string, order_by []string, offset int64, limit int64) ([]Bean, error) {
+	where_sql := CombineWhereExprs(where...)
+	order_by_sql := CreateOrderByExprs(order_by...)
+	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
+	sql := fmt.Sprintf(_SQL_QUERY_BEAN_AGGREGATES, where_sql, order_by_sql, paging_sql)
+	return shouldSelect[Bean](ds, sql, paging_params...)
+}
+
 const _SQL_DELETE_BEAN_CORES = `DELETE FROM bean_cores %s;`
+const _SQL_DELETE_BEAN_EMBEDDINGS = `DELETE FROM bean_embeddings WHERE url IN (SELECT url FROM bean_cores %s);`
+const _SQL_DELETE_BEAN_GISTS = `DELETE FROM bean_gists WHERE url IN (SELECT url FROM bean_cores %s);`
+const _SQL_DELETE_BEAN_CATEGORIES = `DELETE FROM bean_categories WHERE url IN (SELECT url FROM bean_cores %s);`
+const _SQL_DELETE_BEAN_SENTIMENTS = `DELETE FROM bean_sentiments WHERE url IN (SELECT url FROM bean_cores %s);`
+const _SQL_DELETE_BEAN_REGIONS = `DELETE FROM bean_regions WHERE url IN (SELECT url FROM bean_cores %s);`
+const _SQL_DELETE_BEAN_ENTITIES = `DELETE FROM bean_entities WHERE url IN (SELECT url FROM bean_cores %s);`
+const _SQL_DELETE_BEAN_CHATTERS = `DELETE FROM chatters WHERE bean_url IN (SELECT url FROM bean_cores %s);`
 const _SQL_DELETE_CHATTERS = `DELETE FROM chatters %s;`
 const _SQL_DELETE_SOURCES = `DELETE FROM sources %s;`
 
 func (ds *Ducksack) DeleteBeans(wheres ...string) error {
 	where_sql := CombineWhereExprs(wheres...)
-	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CORES, where_sql))
-	logerror(err, "DELETE BEAN ERROR")
-	return err
+	errs := []error{}
+	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_GISTS, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_EMBEDDINGS, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CATEGORIES, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_SENTIMENTS, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_REGIONS, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_ENTITIES, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CHATTERS, where_sql))
+	errs = append(errs, err)
+	_, err = ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_CORES, where_sql))
+	errs = append(errs, err)
+	return errors.Join(errs...)
 }
 
 func (ds *Ducksack) DeleteChatters(wheres ...string) error {
@@ -541,14 +578,6 @@ func CreateWhereExprsForFieldValues(
 		params = append(params, max_distance)
 	}
 	return where_exprs, params
-	// if len(additional_exprs) > 0 {
-	// 	where_exprs = append(where_exprs, additional_exprs...)
-	// }
-
-	// if len(where_exprs) > 0 {
-	// 	return fmt.Sprintf("WHERE %s", strings.Join(where_exprs, " AND ")), params
-	// }
-	// return "", params
 }
 
 func CreateWhereExprsForMissingTags(tagnames []string) []string {

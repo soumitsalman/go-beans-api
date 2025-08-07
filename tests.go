@@ -106,7 +106,7 @@ func TestVectorSearch(t *testing.T) {
 	}
 
 	sources := []string{"techstartups", "techradar"}
-	beans, err := ds.VectorSearchBeanAggregates(query_emb, 0.25, NEWS, time.Time{}, nil, nil, nil, sources, nil, 0, 5, nil)
+	beans, err := ds.VectorSearchBeansWithSelectFields(query_emb, 0.25, NEWS, time.Time{}, nil, nil, nil, sources, nil, 0, 5, nil)
 	noerror(err, "VECTOR SEARCH ERROR")
 	datautils.PrintTable(
 		beans,
@@ -122,7 +122,7 @@ func TestQueryBeans(t *testing.T) {
 	categories := []string{"Artificial Intelligence", "Cloud Computing"}
 	entities := []string{"ChatGPT", "Elon Musk"}
 
-	beans, err := ds.QueryBeanAggregates(NEWS, time.Now().AddDate(0, 0, -3), categories, nil, entities, nil, nil, 0, 5, nil)
+	beans, err := ds.QueryBeansWithSelectFields(NEWS, time.Now().AddDate(0, 0, -3), categories, nil, entities, nil, nil, 0, 5, nil)
 	noerror(err, "QUERY BEANS ERROR")
 	for i := int64(0); i < 3; i++ {
 		datautils.PrintTable(
@@ -245,11 +245,6 @@ func getTestBeans(skip int64, limit int64) []Bean {
 			"gist":       1,
 		},
 	)
-	for i := range beans {
-		if len(beans[i].MongoEmbedding) > 0 {
-			beans[i].Embedding.Scan(beans[i].MongoEmbedding)
-		}
-	}
 	return beans
 }
 

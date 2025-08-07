@@ -21,43 +21,35 @@ CREATE TABLE IF NOT EXISTS bean_cores (
     collected TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS generated_beans (
-    url VARCHAR NOT NULL PRIMARY KEY,
-    intro TEXT,
-    analysis TEXT[],
-    insights TEXT[],
-    verdict TEXT,
-    predictions TEXT[]
-);
 CREATE TABLE IF NOT EXISTS bean_embeddings (
     url VARCHAR NOT NULL PRIMARY KEY,
     embedding FLOAT[%d] NOT NULL,
-    FOREIGN KEY (url) REFERENCES bean_cores(url)
+    -- FOREIGN KEY (url) REFERENCES bean_cores(url)
 );
 CREATE TABLE IF NOT EXISTS bean_gists (
     url VARCHAR NOT NULL PRIMARY KEY,
     gist TEXT NOT NULL CHECK (gist <> ''),
-    FOREIGN KEY (url) REFERENCES bean_cores(url)
+    -- FOREIGN KEY (url) REFERENCES bean_cores(url) 
 );
 CREATE TABLE IF NOT EXISTS bean_categories (
     url VARCHAR NOT NULL,
     category VARCHAR NOT NULL CHECK (category <> ''),
-    FOREIGN KEY (url) REFERENCES bean_cores(url)
+    -- FOREIGN KEY (url) REFERENCES bean_cores(url) 
 );
 CREATE TABLE IF NOT EXISTS bean_sentiments (
     url VARCHAR NOT NULL,
     sentiment VARCHAR NOT NULL CHECK (sentiment <> ''),
-    FOREIGN KEY (url) REFERENCES bean_cores(url)
+    -- FOREIGN KEY (url) REFERENCES bean_cores(url)
 );
 CREATE TABLE IF NOT EXISTS bean_regions (
     url VARCHAR NOT NULL,
     region VARCHAR NOT NULL CHECK (region <> ''),
-    FOREIGN KEY (url) REFERENCES bean_cores(url)
+    -- FOREIGN KEY (url) REFERENCES bean_cores(url)
 );
 CREATE TABLE IF NOT EXISTS bean_entities (
     url VARCHAR NOT NULL,
     entity VARCHAR NOT NULL CHECK (entity <> ''),
-    FOREIGN KEY (url) REFERENCES bean_cores(url)
+    -- FOREIGN KEY (url) REFERENCES bean_cores(url)
 );
 
 CREATE TABLE IF NOT EXISTS chatters (

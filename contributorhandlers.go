@@ -4,43 +4,63 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/k0kubun/pp"
 )
 
-type QueryByMissingTagsRequest struct {
-	Missing []string `json:"missing" binding:"required"`
+type FlexibleBeansQueryRequest struct {
+	Missing []string `json:"missing"`
 	Where   []string `json:"where"`
 	OrderBy []string `json:"order_by"`
-	Limit   int64    `json:"limit" binding:"min=0,max=1024"`
+	URLs    []string `json:"urls"`
+	Limit   int64    `json:"limit" binding:"min=0,max=200" default:"50"`
 }
 
-func createQueryBeansWithMissingTagsHandler(ds *Ducksack) gin.HandlerFunc {
+func validateFlexibleBeansQueryRequest(c *gin.Context) {
+	var req FlexibleBeansQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Limit == 0 {
+		req.Limit = DEFAULT_LIMIT
+	}
+	c.Set("req", req)
+	c.Next()
+}
+
+func createExistsHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req QueryByMissingTagsRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if len(req.Missing) == 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "'missing' field is required"})
-			return
-		}
-		if req.Limit == 0 {
-			req.Limit = DEFAULT_LIMIT
-		}
-		where := CreateWhereExprsForMissingTags(req.Missing)
+		req := c.MustGet("req").(BeansQueryRequest)
+		c.JSON(http.StatusOK, ds.Exists(req.URLs))
+	}
+}
+
+func createQueryBeanCoresHandler(ds *Ducksack) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := c.MustGet("req").(FlexibleBeansQueryRequest)
+		// var beans []Bean
+		// var err error
+		where := []string{}
 		if len(req.Where) > 0 {
 			where = append(where, req.Where...)
 		}
+		if len(req.Missing) > 0 {
+			where = append(where, CreateWhereExprsForMissingTags(req.Missing)...)
+		}
+		// 	beans, err = ds.QueryBeanCores(where, req.OrderBy, 0, req.Limit)
+		// } else {
+		// 	beans, err = ds.QueryBeanAggregates(req.Where, req.OrderBy, 0, req.Limit)
+		// }
 		beans, err := ds.QueryBeanCores(where, req.OrderBy, 0, req.Limit)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, beans)
 	}
 }
 
-// //////// DELETE HANDLERS //////////
+// /////// DELETE HANDLERS ///////
 type DeleteRequests struct {
 	Where []string `json:"where" binding:"required"`
 }
@@ -101,11 +121,11 @@ func createStoreBeansHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var beans []Bean
 		if err := c.ShouldBindJSON(&beans); err != nil {
+			pp.Println("err", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		go ds.StoreBeans(beans)
+		ds.StoreBeans(beans)
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }
@@ -117,8 +137,7 @@ func createStoreEmbeddingsHandler(ds *Ducksack) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		go ds.StoreEmbeddings(embeddings)
+		ds.StoreEmbeddings(embeddings)
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }
@@ -130,8 +149,7 @@ func createStoreTagsHandler(ds *Ducksack) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		go ds.StoreTags(tags)
+		ds.StoreTags(tags)
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }
@@ -144,7 +162,7 @@ func createStoreChatterHandler(ds *Ducksack) gin.HandlerFunc {
 			return
 		}
 
-		go ds.StoreChatters(chatters)
+		ds.StoreChatters(chatters)
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }
@@ -157,7 +175,7 @@ func createStoreSourceHandler(ds *Ducksack) gin.HandlerFunc {
 			return
 		}
 
-		go ds.StoreSources(sources)
+		ds.StoreSources(sources)
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }

@@ -52,13 +52,12 @@ type Bean struct {
 	SummaryLength     int          `db:"summary_length" bson:"num_words_in_summary" json:"-"`
 	Content           string       `db:"content" json:"content,omitempty"`
 	ContentLength     int          `db:"content_length" bson:"num_words_in_content" json:"-"`
-	RestrictedContent bool         `db:"restricted_content" bson:"restricted_content" json:"restricted_content,omitempty"`
+	RestrictedContent bool         `db:"restricted_content" bson:"is_scraped" json:"is_scraped,omitempty"`
 	Author            string       `db:"author" json:"author,omitempty"`
 	Source            string       `db:"source" json:"source,omitempty"`
 	Created           time.Time    `db:"created" bson:"created" json:"created,omitempty"`
-	Collected         time.Time    `db:"collected" bson:"collected" json:"-"`
-	Embedding         Float32Array `db:"embedding" bson:"_" json:"embedding,omitempty"`
-	MongoEmbedding    []float64    `db:"-" bson:"embedding" json:"-"`
+	Collected         time.Time    `db:"collected" bson:"collected" json:"collected,omitempty"`
+	Embedding         Float32Array `db:"embedding" json:"embedding,omitempty"`
 	Categories        StringArray  `db:"categories" json:"categories,omitempty"`
 	Sentiments        StringArray  `db:"sentiments" json:"sentiments,omitempty"`
 	Related           StringArray  `db:"related" json:"related,omitempty"`
@@ -83,8 +82,8 @@ type GeneratedBean struct {
 }
 
 type Chatter struct {
-	ChatterURL  string    `db:"chatter_url" bson:"chatter_url"`
-	BeanURL     string    `db:"bean_url" bson:"url"`
+	ChatterURL  string    `db:"chatter_url" bson:"chatter_url" json:"chatter_url"`
+	BeanURL     string    `db:"bean_url" bson:"url" json:"url"`
 	Source      string    `db:"source"`
 	Forum       string    `db:"forum" bson:"group"`
 	Collected   time.Time `db:"collected"`
