@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     build-essential \
+    ca-certificates \
+    fuse3 \
     sqlite3 \
     libsqlite3-dev \
     libstdc++-12-dev \
@@ -23,6 +25,9 @@ ENV CGO_LDFLAGS="-L/usr/lib -L/usr/lib/x86_64-linux-gnu -lstdc++"
 COPY . .
 RUN go mod download
 RUN CGO_ENABLED=1 GOOS=linux go build -o gobeansack .
+
+COPY --from=flyio/litefs:0.5 /usr/local/bin/litefs /usr/local/bin/litefs
+
 
 # Create directory for SQLite database
 RUN mkdir -p /data

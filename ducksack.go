@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/k0kubun/pp"
 	"github.com/marcboeker/go-duckdb/v2"
 	datautils "github.com/soumitsalman/data-utils"
 	// _ "github.com/mattn/go-sqlite3"
@@ -409,13 +410,14 @@ func (ds *Ducksack) QueryBeansWithSelectFields(
 	regions []string,
 	entities []string,
 	sources []string,
+	addtional_where []string,
 	order_by []string,
 	offset int64, limit int64,
 	select_fields []string) ([]Bean, error) {
 
 	select_fields_sql := createSelectFields(select_fields...)
 	where_exprs, where_params := CreateWhereExprsForFieldValues(kind, created_after, categories, regions, entities, sources, 0)
-	where_sql := CombineWhereExprs(where_exprs...)
+	where_sql := CombineWhereExprs(append(where_exprs, addtional_where...)...)
 	order_by_sql := CreateOrderByExprs(order_by...)
 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
 
@@ -432,6 +434,7 @@ func (ds *Ducksack) VectorSearchBeansWithSelectFields(
 	regions []string,
 	entities []string,
 	sources []string,
+	addtional_where []string,
 	order_by []string,
 	offset int64, limit int64,
 	select_fields []string) ([]Bean, error) {
@@ -443,7 +446,7 @@ func (ds *Ducksack) VectorSearchBeansWithSelectFields(
 	select_fields_sql := createSelectFields(select_fields...)
 	select_fields_sql = fmt.Sprintf("%s, array_cosine_distance(embedding, ?::FLOAT[%d]) AS distance", select_fields_sql, ds.dim)
 	where_exprs, where_params := CreateWhereExprsForFieldValues(kind, created_after, categories, regions, entities, sources, max_distance)
-	where_sql := CombineWhereExprs(where_exprs...)
+	where_sql := CombineWhereExprs(append(where_exprs, addtional_where...)...)
 	order_by_sql := CreateOrderByExprs(order_by...)
 	paging_sql, paging_params := CreatePaginationExprs(offset, limit)
 
@@ -452,6 +455,7 @@ func (ds *Ducksack) VectorSearchBeansWithSelectFields(
 	params = append(params, where_params...)
 	params = append(params, paging_params...)
 	sql, params = mustIn(sql, params...)
+	pp.Println("sql", sql, params)
 	return shouldSelect[Bean](ds, sql, params...)
 }
 

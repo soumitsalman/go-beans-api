@@ -64,7 +64,7 @@ func setupRoutes(ds *Ducksack) *gin.Engine {
 	regapp := r.Group("/", createAuthVerificationHandler("REG_APP_KEY"), validateBeansQueryRequest, validateVectorSearchRequest)
 	{
 		regapp.GET("/beans/trending", createTrendingBeansHandler(ds))
-		regapp.GET("/beans/trending/gists", createTrendingBeanGistsHandler(ds))
+		regapp.GET("/beans/trending/digests", createTrendingBeanDigestsHandler(ds))
 		regapp.GET("/beans/trending/embeddings", createTrendingBeanEmbeddingsHandler(ds))
 	}
 

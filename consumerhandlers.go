@@ -5,16 +5,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/k0kubun/pp"
 )
 
 const (
 	DEFAULT_LIMIT int64 = 50
 	MIN_LIMIT     int64 = 1
-	MAX_LIMIT     int64 = 200
+	MAX_LIMIT     int64 = 300
 )
 
 var SELECT_PUBLIC_FIELDS = []string{"url", "kind", "title", "summary", "author", "source", "created", "categories", "sentiments", "regions", "entities", "updated", "likes", "comments", "shares"}
-var SELECT_GISTS = []string{"url", "created", "updated", "gist"}
+var SELECT_GISTS = []string{"url", "created", "updated", "gist", "categories", "sentiments", "regions", "entities"}
 var SELECT_EMBEDDINGS = []string{"url", "created", "updated", "embedding"}
 var ORDER_BY_CREATED = []string{"created DESC"}
 var ORDER_BY_DISTANCE = []string{"distance ASC"}
@@ -28,8 +29,8 @@ type BeansQueryRequest struct {
 	Regions    []string  `form:"regions"`
 	Entities   []string  `form:"entities"`
 	Domains    []string  `form:"domains"`
-	Offset     int64     `form:"offset" binding:"min=0"`
-	Limit      int64     `form:"limit" binding:"min=0,max=200" default:"50"`
+	Offset     int64     `form:"offset" json:"offset" binding:"min=0"`
+	Limit      int64     `form:"limit" json:"limit" binding:"min=0,max=300" default:"50"`
 	// these are body params
 	Embedding   Float32Array `json:"embedding,omitempty"`
 	MaxDistance float64      `json:"max_distance,omitempty" binding:"min=0,max=1"`
@@ -39,11 +40,13 @@ type BeansQueryRequest struct {
 func validateBeansQueryRequest(c *gin.Context) {
 	var req BeansQueryRequest
 	err := c.ShouldBindQuery(&req)
+	pp.Println("err", err)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	err = c.ShouldBindJSON(&req)
+	pp.Println("err", err)
 	// not having a body is not an error, malformed json is
 	if err != nil && err.Error() != "EOF" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -68,7 +71,7 @@ func createQueryLatestBeansHandler(ds *Ducksack) gin.HandlerFunc {
 		if len(req.Embedding) > 0 {
 			order_by = ORDER_BY_DISTANCE
 		}
-		beans, err := findBeans(ds, req, order_by, SELECT_PUBLIC_FIELDS)
+		beans, err := findBeans(ds, req, nil, order_by, SELECT_PUBLIC_FIELDS)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -146,7 +149,7 @@ func validateVectorSearchRequest(c *gin.Context) {
 func createTrendingBeansHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
-		beans, err := findBeans(ds, req, ORDER_BY_CHATTERS, nil)
+		beans, err := findBeans(ds, req, nil, ORDER_BY_CHATTERS, nil)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -155,14 +158,16 @@ func createTrendingBeansHandler(ds *Ducksack) gin.HandlerFunc {
 	}
 }
 
-func createTrendingBeanGistsHandler(ds *Ducksack) gin.HandlerFunc {
+func createTrendingBeanDigestsHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
-		beans, err := findBeans(ds, req, ORDER_BY_CHATTERS, SELECT_GISTS)
+		// pp.Println("req", req)
+		beans, err := findBeans(ds, req, nil, ORDER_BY_CHATTERS, SELECT_GISTS)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		pp.Println("beans", len(beans))
 		c.JSON(http.StatusOK, beans)
 	}
 }
@@ -170,7 +175,7 @@ func createTrendingBeanGistsHandler(ds *Ducksack) gin.HandlerFunc {
 func createTrendingBeanEmbeddingsHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
-		beans, err := findBeans(ds, req, ORDER_BY_CHATTERS, SELECT_EMBEDDINGS)
+		beans, err := findBeans(ds, req, []string{"embedding IS NOT NULL"}, ORDER_BY_CHATTERS, SELECT_EMBEDDINGS)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -179,7 +184,7 @@ func createTrendingBeanEmbeddingsHandler(ds *Ducksack) gin.HandlerFunc {
 	}
 }
 
-func findBeans(ds *Ducksack, req BeansQueryRequest, order_by []string, fields []string) ([]Bean, error) {
+func findBeans(ds *Ducksack, req BeansQueryRequest, additional_where []string, order_by []string, fields []string) ([]Bean, error) {
 	if len(req.Embedding) > 0 {
 		return ds.VectorSearchBeansWithSelectFields(
 			req.Embedding,
@@ -190,6 +195,7 @@ func findBeans(ds *Ducksack, req BeansQueryRequest, order_by []string, fields []
 			req.Regions,
 			req.Entities,
 			req.Domains,
+			additional_where,
 			order_by,
 			req.Offset,
 			req.Limit,
@@ -203,6 +209,7 @@ func findBeans(ds *Ducksack, req BeansQueryRequest, order_by []string, fields []
 			req.Regions,
 			req.Entities,
 			req.Domains,
+			additional_where,
 			order_by,
 			req.Offset,
 			req.Limit,
