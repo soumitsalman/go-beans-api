@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
 	datautils "github.com/soumitsalman/data-utils"
 )
@@ -69,70 +67,70 @@ func (q *SelectExpr) WhereWithArg(expr string, arg any) *SelectExpr {
 	return q
 }
 
-func (q *SelectExpr) WhereForCustomColumns(
-	urls []string,
-	kind string,
-	created_after time.Time,
-	categories []string,
-	regions []string,
-	entities []string,
-	sources []string,
-	embedding []float32,
-	max_distance float64,
-) *SelectExpr {
-	if len(urls) > 0 {
-		q.where = append(q.where, ExprWithArg{expr: "url IN (?)", arg: urls})
-	}
-	if kind != "" {
-		q.where = append(q.where, ExprWithArg{expr: "kind = ?", arg: kind})
-	}
-	if !created_after.IsZero() {
-		q.where = append(q.where, ExprWithArg{expr: "created >= ?", arg: created_after})
-	}
-	if len(categories) > 0 {
-		q.where = append(q.where, ExprWithArg{expr: "ARRAY_HAS_ANY(categories, ?)", arg: StringArray(categories)})
-	}
-	if len(regions) > 0 {
-		q.where = append(q.where, ExprWithArg{expr: "ARRAY_HAS_ANY(regions, ?)", arg: StringArray(regions)})
-	}
-	if len(entities) > 0 {
-		q.where = append(q.where, ExprWithArg{expr: "ARRAY_HAS_ANY(entities, ?)", arg: StringArray(entities)})
-	}
-	if len(sources) > 0 {
-		q.where = append(q.where, ExprWithArg{expr: "source IN (?)", arg: sources})
-	}
-	if embedding != nil {
-		q.columns = append(q.columns, ExprWithArg{expr: fmt.Sprintf("array_cosine_distance(embedding, ?::FLOAT[%d]) AS distance", q.dim), arg: Float32Array(embedding)})
-	}
-	if max_distance > 0 {
-		q.where = append(q.where, ExprWithArg{expr: "distance <= ?", arg: max_distance})
-	}
-	return q
-}
+// func (q *SelectExpr) WhereForCustomColumns(
+// 	urls []string,
+// 	kind string,
+// 	created_after time.Time,
+// 	categories []string,
+// 	regions []string,
+// 	entities []string,
+// 	sources []string,
+// 	embedding []float32,
+// 	max_distance float64,
+// ) *SelectExpr {
+// 	if len(urls) > 0 {
+// 		q.where = append(q.where, ExprWithArg{expr: "url IN (?)", arg: urls})
+// 	}
+// 	if kind != "" {
+// 		q.where = append(q.where, ExprWithArg{expr: "kind = ?", arg: kind})
+// 	}
+// 	if !created_after.IsZero() {
+// 		q.where = append(q.where, ExprWithArg{expr: "created >= ?", arg: created_after})
+// 	}
+// 	if len(categories) > 0 {
+// 		q.where = append(q.where, ExprWithArg{expr: "ARRAY_HAS_ANY(categories, ?)", arg: StringArray(categories)})
+// 	}
+// 	if len(regions) > 0 {
+// 		q.where = append(q.where, ExprWithArg{expr: "ARRAY_HAS_ANY(regions, ?)", arg: StringArray(regions)})
+// 	}
+// 	if len(entities) > 0 {
+// 		q.where = append(q.where, ExprWithArg{expr: "ARRAY_HAS_ANY(entities, ?)", arg: StringArray(entities)})
+// 	}
+// 	if len(sources) > 0 {
+// 		q.where = append(q.where, ExprWithArg{expr: "source IN (?)", arg: sources})
+// 	}
+// 	if embedding != nil {
+// 		q.columns = append(q.columns, ExprWithArg{expr: fmt.Sprintf("array_cosine_distance(embedding, ?::FLOAT[%d]) AS distance", q.dim), arg: Float32Array(embedding)})
+// 	}
+// 	if max_distance > 0 {
+// 		q.where = append(q.where, ExprWithArg{expr: "distance <= ?", arg: max_distance})
+// 	}
+// 	return q
+// }
 
-const _SQL_MISSING_COLUMN = "url NOT IN (SELECT url FROM %s)"
+// const _SQL_MISSING_COLUMN = "url NOT IN (SELECT url FROM %s)"
 
-func (q *SelectExpr) WhereForMissingColumns(columns ...string) *SelectExpr {
-	for _, column := range columns {
-		switch column {
-		case "gist":
-			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_GISTS), arg: nil})
-		case "embedding":
-			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_EMBEDDINGS), arg: nil})
-		case "category":
-			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_CATEGORIES), arg: nil})
-		case "sentiment":
-			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_SENTIMENTS), arg: nil})
-		case "region":
-		case "regions":
-			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_REGIONS), arg: nil})
-		case "entity":
-		case "entities":
-			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_ENTITIES), arg: nil})
-		}
-	}
-	return q
-}
+// func (q *SelectExpr) WhereForMissingColumns(columns ...string) *SelectExpr {
+// 	for _, column := range columns {
+// 		switch column {
+// 		case "gist":
+// 			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_GISTS), arg: nil})
+// 		case "embedding":
+// 			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_EMBEDDINGS), arg: nil})
+// 		case "category":
+// 			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_CATEGORIES), arg: nil})
+// 		case "sentiment":
+// 			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_SENTIMENTS), arg: nil})
+// 		case "region":
+// 		case "regions":
+// 			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_REGIONS), arg: nil})
+// 		case "entity":
+// 		case "entities":
+// 			q.where = append(q.where, ExprWithArg{expr: fmt.Sprintf(_SQL_MISSING_COLUMN, BEAN_ENTITIES), arg: nil})
+// 		}
+// 	}
+// 	return q
+// }
 
 func (q *SelectExpr) Order(orders ...string) *SelectExpr {
 	if len(orders) > 0 {

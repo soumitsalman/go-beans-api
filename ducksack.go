@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/k0kubun/pp"
 	"github.com/marcboeker/go-duckdb/v2"
 	datautils "github.com/soumitsalman/data-utils"
 	// _ "github.com/mattn/go-sqlite3"
@@ -41,10 +40,10 @@ const (
 )
 
 const (
-	WHERE_GIST_IS_NOT_NULL = "gist IS NOT NULL"
-	ORDER_BY_DISTANCE      = "distance ASC"
-	ORDER_BY_CREATED       = "created DESC"
-	ORDER_BY_UPDATED       = "DATE(updated) DESC, comments DESC, likes DESC, shares DESC"
+	GIST_IS_NOT_NULL  = "gist IS NOT NULL"
+	ORDER_BY_DISTANCE = "distance ASC"
+	ORDER_BY_CREATED  = "created DESC"
+	ORDER_BY_UPDATED  = "DATE(updated) DESC, comments DESC, likes DESC, shares DESC"
 )
 
 type Ducksack struct {
@@ -269,7 +268,7 @@ func mustIn(query string, args ...any) (string, []any) {
 
 func shouldIn(query string, args ...any) (string, []any, error) {
 	query, args, err := sqlx.In(query, args...)
-	logerror(err, "IN ERROR")
+	logerror(err, "IN ERROR", query)
 	return query, args, err
 }
 
@@ -282,7 +281,7 @@ func mustSelect[T any](ds *Ducksack, query string, args ...any) []T {
 func shouldSelect[T any](ds *Ducksack, query string, args ...any) ([]T, error) {
 	var data []T
 	err := ds.query.Select(&data, query, args...)
-	logerror(err, "SELECT ERROR")
+	logerror(err, "SELECT ERROR", query)
 	return data, err
 }
 
@@ -397,52 +396,41 @@ func (ds *Ducksack) DistinctSources() []string {
 
 // ////////// COMPOSITE QUERIES ///////////
 
-func (ds *Ducksack) QueryBeanAggregates(
-	urls []string,
-	kind string,
-	created_after time.Time,
-	categories []string,
-	regions []string,
-	entities []string,
-	sources []string,
-	embedding []float32,
-	max_distance float64,
-	order []string,
-	offset int,
-	limit int,
-	columns []string,
-) []Bean {
-	query := NewSelect(ds).
-		Table(BEAN_AGGREGATES).
-		Columns(columns...).
-		WhereForCustomColumns(
-			urls,
-			kind,
-			created_after,
-			categories,
-			regions,
-			entities,
-			sources,
-			embedding,
-			max_distance,
-		).
-		Limit(limit).
-		Offset(offset)
+// func (ds *Ducksack) QueryBeanAggregates(
+// 	urls []string,
+// 	kind string,
+// 	created_after time.Time,
+// 	categories []string,
+// 	regions []string,
+// 	entities []string,
+// 	sources []string,
+// 	embedding []float32,
+// 	max_distance float64,
+// 	order []string,
+// 	offset int,
+// 	limit int,
+// 	columns []string,
+// ) []Bean {
+// 	query := NewSelect(ds).
+// 		Table(BEAN_AGGREGATES).
+// 		Columns(columns...).
+// 		WhereForCustomColumns(
+// 			urls,
+// 			kind,
+// 			created_after,
+// 			categories,
+// 			regions,
+// 			entities,
+// 			sources,
+// 			embedding,
+// 			max_distance,
+// 		).
+// 		Order(order...).
+// 		Limit(limit).
+// 		Offset(offset)
 
-	sql, params := query.ToSQL()
-	pp.Println("sql", sql, len(params))
-
-	sql, params, err := shouldIn(sql, params...)
-	if err != nil {
-		return nil
-	}
-
-	beans, err := shouldSelect[Bean](ds, sql, params...)
-	if err != nil {
-		return nil
-	}
-	return beans
-}
+// 	return ds.QueryBeans(query)
+// }
 
 // const _SQL_QUERY_BEANS_SELECT_FIELDS = `
 // SELECT %s FROM bean_aggregates
@@ -512,21 +500,6 @@ func (ds *Ducksack) QueryBeanAggregates(
 // %s
 // %s;`
 
-func (ds *Ducksack) QueryBeanCores(where []string, order []string, offset int, limit int) []Bean {
-	query := NewSelect(ds).
-		Table(BEAN_CORES).
-		Where(where...).
-		Offset(offset).
-		Limit(limit)
-
-	sql, params := query.ToSQL()
-	beans, err := shouldSelect[Bean](ds, sql, params...)
-	if err != nil {
-		return nil
-	}
-	return beans
-}
-
 // const _SQL_QUERY_BEAN_AGGREGATES = `
 // SELECT * FROM bean_aggregates
 // %s
@@ -541,6 +514,50 @@ func (ds *Ducksack) QueryBeanCores(where []string, order []string, offset int, l
 // 	return shouldSelect[Bean](ds, sql, paging_params...)
 // }
 
+func (ds *Ducksack) QueryBeanCores(
+	where []string,
+	order []string,
+	offset int,
+	limit int,
+) []Bean {
+	query := NewSelect(ds).
+		Table(BEAN_CORES).
+		Where(where...).
+		Offset(offset).
+		Limit(limit)
+
+	return ds.QueryBeans(query)
+}
+
+func (ds *Ducksack) QueryBeanAggregates(
+	where []string,
+	order []string,
+	offset int,
+	limit int,
+) []Bean {
+	query := NewSelect(ds).
+		Table(BEAN_AGGREGATES).
+		Where(where...).
+		Offset(offset).
+		Limit(limit)
+
+	return ds.QueryBeans(query)
+}
+
+func (ds *Ducksack) QueryBeans(query *SelectExpr) []Bean {
+	sql, params := query.ToSQL()
+	sql, params, err := shouldIn(sql, params...)
+	if err != nil {
+		return nil
+	}
+	beans, err := shouldSelect[Bean](ds, sql, params...)
+	if err != nil {
+		return nil
+	}
+	log.Println(sql, len(params), len(beans))
+	return beans
+}
+
 const _SQL_DELETE_BEAN_CORES = `DELETE FROM bean_cores %s;`
 const _SQL_DELETE_BEAN_EMBEDDINGS = `DELETE FROM bean_embeddings WHERE url IN (SELECT url FROM bean_cores %s);`
 const _SQL_DELETE_BEAN_GISTS = `DELETE FROM bean_gists WHERE url IN (SELECT url FROM bean_cores %s);`
@@ -553,7 +570,7 @@ const _SQL_DELETE_CHATTERS = `DELETE FROM chatters %s;`
 const _SQL_DELETE_SOURCES = `DELETE FROM sources %s;`
 
 func (ds *Ducksack) DeleteBeans(wheres ...string) error {
-	where_sql := CombineWhereExprs(wheres...)
+	where_sql := combineWhereExprs(wheres...)
 	errs := []error{}
 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_BEAN_GISTS, where_sql))
 	errs = append(errs, err)
@@ -575,7 +592,7 @@ func (ds *Ducksack) DeleteBeans(wheres ...string) error {
 }
 
 func (ds *Ducksack) DeleteChatters(wheres ...string) error {
-	where_sql := CombineWhereExprs(wheres...)
+	where_sql := combineWhereExprs(wheres...)
 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_CHATTERS, where_sql))
 	logerror(err, "DELETE CHATTERS ERROR")
 	return err
@@ -583,13 +600,13 @@ func (ds *Ducksack) DeleteChatters(wheres ...string) error {
 
 func (ds *Ducksack) DeleteSources(wheres ...string) error {
 
-	where_sql := CombineWhereExprs(wheres...)
+	where_sql := combineWhereExprs(wheres...)
 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_SOURCES, where_sql))
 	logerror(err, "DELETE SOURCES ERROR")
 	return err
 }
 
-func CombineWhereExprs(exprs ...string) string {
+func combineWhereExprs(exprs ...string) string {
 	if len(exprs) > 0 {
 		return fmt.Sprintf("WHERE %s", strings.Join(exprs, " AND "))
 	}
@@ -716,8 +733,8 @@ func noerror(err error, msg string) {
 	}
 }
 
-func logerror(err error, msg string) {
+func logerror(err error, msg ...string) {
 	if err != nil {
-		log.Println(err)
+		log.Println(msg, err)
 	}
 }

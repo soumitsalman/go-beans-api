@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/k0kubun/pp"
@@ -99,41 +97,41 @@ func TestQueryBeanExtensions(t *testing.T) {
 	pp.Println("BEAN CLUSTERS", ds.GetRelated(urls))
 }
 
-func TestVectorSearch(t *testing.T) {
-	ds := setupTestDB(t)
-	query_emb := Float32Array{
-		// ... embedding values from original test
-	}
+// func TestVectorSearch(t *testing.T) {
+// 	ds := setupTestDB(t)
+// 	query_emb := Float32Array{
+// 		// ... embedding values from original test
+// 	}
 
-	sources := []string{"techstartups", "techradar"}
-	beans, err := ds.VectorSearchBeansWithSelectFields(query_emb, 0.25, NEWS, time.Time{}, nil, nil, nil, sources, nil, nil, 0, 5, nil)
-	noerror(err, "VECTOR SEARCH ERROR")
-	datautils.PrintTable(
-		beans,
-		[]string{"kind", "title", "categories", "entities", "created", "source"},
-		func(b *Bean) []string {
-			return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339), b.Source}
-		},
-	)
-}
+// 	sources := []string{"techstartups", "techradar"}
+// 	beans, err := ds.VectorSearchBeansWithSelectFields(query_emb, 0.25, NEWS, time.Time{}, nil, nil, nil, sources, nil, nil, 0, 5, nil)
+// 	noerror(err, "VECTOR SEARCH ERROR")
+// 	datautils.PrintTable(
+// 		beans,
+// 		[]string{"kind", "title", "categories", "entities", "created", "source"},
+// 		func(b *Bean) []string {
+// 			return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339), b.Source}
+// 		},
+// 	)
+// }
 
-func TestQueryBeans(t *testing.T) {
-	ds := setupTestDB(t)
-	categories := []string{"Artificial Intelligence", "Cloud Computing"}
-	entities := []string{"ChatGPT", "Elon Musk"}
+// func TestQueryBeans(t *testing.T) {
+// 	ds := setupTestDB(t)
+// 	categories := []string{"Artificial Intelligence", "Cloud Computing"}
+// 	entities := []string{"ChatGPT", "Elon Musk"}
 
-	beans, err := ds.QueryBeansWithSelectFields(NEWS, time.Now().AddDate(0, 0, -3), categories, nil, entities, nil, nil, nil, 0, 5, nil)
-	noerror(err, "QUERY BEANS ERROR")
-	for i := int64(0); i < 3; i++ {
-		datautils.PrintTable(
-			beans,
-			[]string{"kind", "title", "categories", "entities", "created", "source"},
-			func(b *Bean) []string {
-				return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339), b.Source}
-			},
-		)
-	}
-}
+// 	beans, err := ds.QueryBeansWithSelectFields(NEWS, time.Now().AddDate(0, 0, -3), categories, nil, entities, nil, nil, nil, 0, 5, nil)
+// 	noerror(err, "QUERY BEANS ERROR")
+// 	for i := int64(0); i < 3; i++ {
+// 		datautils.PrintTable(
+// 			beans,
+// 			[]string{"kind", "title", "categories", "entities", "created", "source"},
+// 			func(b *Bean) []string {
+// 				return []string{b.Kind, b.Title, strings.Join(b.Categories, ", "), strings.Join(b.Entities, ", "), b.Created.Format(time.RFC3339), b.Source}
+// 			},
+// 		)
+// 	}
+// }
 
 func TestQueryRelated(t *testing.T) {
 	ds := setupTestDB(t)

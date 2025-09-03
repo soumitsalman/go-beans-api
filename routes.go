@@ -34,38 +34,38 @@ func setupRoutes(ds *Ducksack) *gin.Engine {
 
 	// NEWS API ENDPOINTS
 	// everything sorted by created_at DESC
-	articles := r.Group("/articles", validateBeansQueryRequest)
+	public := r.Group("/public/beans", validateQueryRequest)
 	{
-		articles.GET("/latest", createQueryLatestBeansHandler(ds))
-		articles.GET("/related", createRelatedBeansHandler(ds))
-		articles.GET("/regions", createRegionsHandler(ds))
-		articles.GET("/entities", createEntitiesHandler(ds))
-		articles.GET("/categories", createCategoriesHandler(ds))
-		articles.GET("/sources", createSourcesHandler(ds))
-	}
-
-	// CONTRIBUTOR ENDPOINTS
-	contributor := r.Group("/", createAuthVerificationHandler("CONTRIBUTOR_KEY"))
-	{
-		contributor.GET("/beans/cores", validateFlexibleBeansQueryRequest, createQueryBeanCoresHandler(ds))
-		contributor.GET("/beans/exists", validateBeansQueryRequest, createExistsHandler(ds))
-		contributor.POST("/beans", createStoreBeansHandler(ds))
-		contributor.POST("/beans/embeddings", createStoreEmbeddingsHandler(ds))
-		contributor.POST("/beans/tags", createStoreTagsHandler(ds))
-		contributor.POST("/chatters", createStoreChatterHandler(ds))
-		contributor.POST("/sources", createStoreSourceHandler(ds))
-		contributor.DELETE("/beans", validateDeleteRequest, createDeleteBeansHandler(ds))
-		contributor.DELETE("/chatters", validateDeleteRequest, createDeleteChattersHandler(ds))
-		contributor.DELETE("/sources", validateDeleteRequest, createDeleteSourcesHandler(ds))
+		public.GET("/latest", createLatestBeansHandler(ds))
+		public.GET("/related", createRelatedBeansHandler(ds))
+		public.GET("/regions", createRegionsHandler(ds))
+		public.GET("/entities", createEntitiesHandler(ds))
+		public.GET("/categories", createCategoriesHandler(ds))
+		public.GET("/sources", createSourcesHandler(ds))
 	}
 
 	// REGISTERED APPLICATION ENDPOINTS
 	// everything sorted by trending DESC
-	regapp := r.Group("/", createAuthVerificationHandler("REG_APP_KEY"), validateBeansQueryRequest, validateVectorSearchRequest)
+	privileged := r.Group("/privileged/beans", createAuthVerificationHandler("PRIVILEGED_KEY"), validateQueryRequest)
 	{
-		regapp.GET("/beans/trending", createTrendingBeansHandler(ds))
-		regapp.GET("/beans/trending/digests", createTrendingBeanDigestsHandler(ds))
-		regapp.GET("/beans/trending/embeddings", createTrendingBeanEmbeddingsHandler(ds))
+		privileged.GET("/exists", createExistsHandler(ds))
+		privileged.GET("/contents", createContentsHandler(ds))
+		privileged.GET("/trending", createTrendingBeansHandler(ds))
+		privileged.GET("/trending/digests", createTrendingDigestsHandler(ds))
+		privileged.GET("/trending/embeddings", createTrendingEmbeddingsHandler(ds))
+	}
+
+	// CONTRIBUTOR ENDPOINTS
+	publisher := r.Group("/publisher", createAuthVerificationHandler("PUBLISHER_KEY"))
+	{
+		publisher.POST("/beans", createStoreBeansHandler(ds))
+		publisher.POST("/beans/embeddings", createStoreEmbeddingsHandler(ds))
+		publisher.POST("/beans/tags", createStoreTagsHandler(ds))
+		publisher.POST("/chatters", createStoreChatterHandler(ds))
+		publisher.POST("/sources", createStoreSourceHandler(ds))
+		publisher.DELETE("/beans", validateDeleteRequest, createDeleteBeansHandler(ds))
+		publisher.DELETE("/chatters", validateDeleteRequest, createDeleteChattersHandler(ds))
+		publisher.DELETE("/sources", validateDeleteRequest, createDeleteSourcesHandler(ds))
 	}
 
 	// ADMIN ENDPOINTS
