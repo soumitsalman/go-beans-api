@@ -6,24 +6,29 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
 	DEFAULT_DB_PATH     = ""
 	DEFAULT_VECTOR_DIM  = 384
-	DEFAULT_CLUSTER_EPS = 0.43
+	DEFAULT_RELATED_EPS = 0.43
 	DEFAULT_PORT        = "8080"
 	DB_NAME             = "beansack.db"
 )
 
 func main() {
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
+
 	// Load configuration from environment variables
 	// Read the configuration parameters
 	godotenv.Load(".env")
 
 	// if nothing is mentioned then treat this as in memory db
 	// else if the directory is mentioned but directory does not exist then create one
-	dbpath, ok := os.LookupEnv("DB_DIR")
+	dbpath, ok := os.LookupEnv("DATA")
 	if !ok {
 		dbpath = DEFAULT_DB_PATH
 	} else {
@@ -34,15 +39,15 @@ func main() {
 	}
 
 	// vector dimension
-	dim, err := strconv.Atoi(os.Getenv("VECTOR_DIM"))
+	dim, err := strconv.Atoi(os.Getenv("VECTOR_DIMENSIONS"))
 	if err != nil {
 		dim = DEFAULT_VECTOR_DIM
 	}
 
 	// Get cluster epsilon from env or use default
-	cluster_eps, err := strconv.ParseFloat(os.Getenv("CLUSTER_EPS"), 64)
+	related_eps, err := strconv.ParseFloat(os.Getenv("RELATED_EPS"), 64)
 	if err != nil {
-		cluster_eps = DEFAULT_CLUSTER_EPS
+		related_eps = DEFAULT_RELATED_EPS
 	}
 
 	// server port
@@ -54,9 +59,9 @@ func main() {
 	// initialize database
 	init, err := os.ReadFile("./factory/init.sql")
 	noerror(err, "READ SQL ERROR")
-	ds := NewBeansack(dbpath, string(init), dim, cluster_eps)
+	ds := NewBeansack(dbpath, string(init), dim, related_eps)
 	defer ds.Close()
 
-	r := setupRoutes(ds)
+	r := initRoutes(ds)
 	noerror(r.Run(":"+port), "SERVER ERROR")
 }

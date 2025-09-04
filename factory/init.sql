@@ -2,8 +2,10 @@
 -- ATTACH 'ducklake:.cache/catalog.db' AS beanlake (DATA_PATH '.cache/');
 -- USE beanlake;
 
-INSTALL vss;
-LOAD vss;
+SET preserve_insertion_order=false;
+
+-- INSTALL vss;
+-- LOAD vss;
 
 CREATE TABLE IF NOT EXISTS bean_cores (
     url VARCHAR NOT NULL PRIMARY KEY,

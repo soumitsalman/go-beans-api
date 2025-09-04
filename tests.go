@@ -32,7 +32,7 @@ func setupTestDB(t *testing.T) *Ducksack {
 		dbpath = DEFAULT_DB_PATH
 	}
 	dim := DEFAULT_VECTOR_DIM
-	cluster_eps := DEFAULT_CLUSTER_EPS
+	cluster_eps := DEFAULT_RELATED_EPS
 
 	// initialize database if needed
 	init, err := os.ReadFile("./factory/init.sql")

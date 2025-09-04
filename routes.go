@@ -26,9 +26,11 @@ func createAuthVerificationHandler(expectedKeyName string) gin.HandlerFunc {
 	}
 }
 
-func setupRoutes(ds *Ducksack) *gin.Engine {
-	r := gin.Default()
+func initRoutes(ds *Ducksack) *gin.Engine {
+	// vector_query_throttle := make(chan int, max(1, runtime.NumCPU()>>1))
+	vector_query_throttle := make(chan int, 2)
 
+	r := gin.Default()
 	// Health check endpoint - no auth required
 	r.GET("/health", healthCheckHandler)
 
@@ -36,7 +38,8 @@ func setupRoutes(ds *Ducksack) *gin.Engine {
 	// everything sorted by created_at DESC
 	public := r.Group("/public/beans", validateQueryRequest)
 	{
-		public.GET("/latest", createLatestBeansHandler(ds))
+		public.GET("/latest", createLatestBeansHandler(ds, vector_query_throttle))
+		public.GET("/exists", createExistsHandler(ds))
 		public.GET("/related", createRelatedBeansHandler(ds))
 		public.GET("/regions", createRegionsHandler(ds))
 		public.GET("/entities", createEntitiesHandler(ds))
@@ -48,19 +51,18 @@ func setupRoutes(ds *Ducksack) *gin.Engine {
 	// everything sorted by trending DESC
 	privileged := r.Group("/privileged/beans", createAuthVerificationHandler("PRIVILEGED_KEY"), validateQueryRequest)
 	{
-		privileged.GET("/exists", createExistsHandler(ds))
-		privileged.GET("/latest/contents", createContentsHandler(ds))
-		privileged.GET("/trending", createTrendingBeansHandler(ds))
-		privileged.GET("/trending/digests", createTrendingDigestsHandler(ds))
-		privileged.GET("/trending/embeddings", createTrendingEmbeddingsHandler(ds))
+		privileged.GET("/latest/contents", createLatestContentsHandler(ds, vector_query_throttle))
+		privileged.GET("/trending", createTrendingBeansHandler(ds, vector_query_throttle))
+		privileged.GET("/trending/tags", createTrendingTagsHandler(ds, vector_query_throttle))
+		privileged.GET("/trending/embeddings", createTrendingEmbeddingsHandler(ds, vector_query_throttle))
 	}
 
 	// CONTRIBUTOR ENDPOINTS
 	publisher := r.Group("/publisher", createAuthVerificationHandler("PUBLISHER_KEY"))
 	{
 		publisher.POST("/beans", createStoreBeansHandler(ds))
-		publisher.POST("/beans/embeddings", createStoreEmbeddingsHandler(ds))
 		publisher.POST("/beans/tags", createStoreTagsHandler(ds))
+		publisher.POST("/beans/embeddings", createStoreEmbeddingsHandler(ds))
 		publisher.POST("/chatters", createStoreChatterHandler(ds))
 		publisher.POST("/sources", createStoreSourceHandler(ds))
 		publisher.DELETE("/beans", validateDeleteRequest, createDeleteBeansHandler(ds))

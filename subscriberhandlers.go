@@ -42,13 +42,11 @@ type QueryRequest struct {
 func validateQueryRequest(c *gin.Context) {
 	var req QueryRequest
 	err := c.ShouldBindQuery(&req)
-	// pp.Println("err", err)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	err = c.ShouldBindJSON(&req)
-	// pp.Println("err", err)
 	// not having a body is not an error, malformed json is
 	if err != nil && err.Error() != "EOF" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -62,26 +60,27 @@ func validateQueryRequest(c *gin.Context) {
 	if req.Limit == 0 {
 		req.Limit = DEFAULT_LIMIT
 	}
-	c.Set("req", req)
+	c.Set("req", &req)
 	c.Next()
 }
 
-func createLatestBeansHandler(ds *Ducksack) gin.HandlerFunc {
+func createLatestBeansHandler(ds *Ducksack, throttle chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		order_by := ORDER_BY_CREATED
 		if len(req.Embedding) > 0 {
 			order_by = ORDER_BY_DISTANCE
 		}
-		query := buildQuery(ds, &req).Columns(SELECT_PUBLIC_FIELDS...).Table(BEAN_AGGREGATES).Order(order_by)
-		beans := ds.QueryBeans(query)
+		query := buildQuery(ds, req).Columns(SELECT_PUBLIC_FIELDS...).Table(BEAN_AGGREGATES).Order(order_by)
+		// beans := ds.QueryBeans(query)
+		beans := runThrottledQuery(ds, query, req, throttle)
 		c.JSON(http.StatusOK, beans)
 	}
 }
 
 func createRelatedBeansHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		if len(req.URLs) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "urls is required"})
 			return
@@ -92,7 +91,7 @@ func createRelatedBeansHandler(ds *Ducksack) gin.HandlerFunc {
 
 func createRegionsHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		if len(req.URLs) > 0 {
 			c.JSON(http.StatusOK, ds.GetRegions(req.URLs))
 		} else {
@@ -103,7 +102,7 @@ func createRegionsHandler(ds *Ducksack) gin.HandlerFunc {
 
 func createEntitiesHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		if len(req.URLs) > 0 {
 			c.JSON(http.StatusOK, ds.GetEntities(req.URLs))
 		} else {
@@ -114,7 +113,7 @@ func createEntitiesHandler(ds *Ducksack) gin.HandlerFunc {
 
 func createCategoriesHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		if len(req.URLs) > 0 {
 			c.JSON(http.StatusOK, ds.GetCategories(req.URLs))
 		} else {
@@ -125,7 +124,7 @@ func createCategoriesHandler(ds *Ducksack) gin.HandlerFunc {
 
 func createSourcesHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		if len(req.DomainNames) > 0 {
 			c.JSON(http.StatusOK, ds.GetSources(req.DomainNames))
 		} else {
@@ -134,49 +133,75 @@ func createSourcesHandler(ds *Ducksack) gin.HandlerFunc {
 	}
 }
 
-////////// SORT BY TRENDING AND GET ALL FIELDS //////////
+////////// PRIVILEGED //////////
 
 func createExistsHandler(ds *Ducksack) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
+		req := c.MustGet("req").(*QueryRequest)
 		c.JSON(http.StatusOK, ds.Exists(req.URLs))
 	}
 }
 
-func createContentsHandler(ds *Ducksack) gin.HandlerFunc {
+func createLatestContentsHandler(ds *Ducksack, throttle chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
-		query := buildQuery(ds, &req).Table(BEAN_CORES).Order(ORDER_BY_CREATED)
-		beans := ds.QueryBeans(query)
+		req := c.MustGet("req").(*QueryRequest)
+		query := buildQuery(ds, req).Table(BEAN_CORES).Order(ORDER_BY_CREATED)
+		// beans := ds.QueryBeans(query)
+		beans := runThrottledQuery(ds, query, req, throttle)
 		c.JSON(http.StatusOK, beans)
 	}
 }
 
-func createTrendingBeansHandler(ds *Ducksack) gin.HandlerFunc {
+func createTrendingBeansHandler(ds *Ducksack, throttle chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
-		query := buildQuery(ds, &req).Table(BEAN_AGGREGATES).Order(ORDER_BY_UPDATED)
-		beans := ds.QueryBeans(query)
+		req := c.MustGet("req").(*QueryRequest)
+		query := buildQuery(ds, req).
+			Table(BEAN_AGGREGATES).
+			Where(HAS_CHATTERS).
+			Order(ORDER_BY_UPDATED)
+		// beans := ds.QueryBeans(query)
+		beans := runThrottledQuery(ds, query, req, throttle)
 		c.JSON(http.StatusOK, beans)
 	}
 }
 
-func createTrendingDigestsHandler(ds *Ducksack) gin.HandlerFunc {
+func createTrendingTagsHandler(ds *Ducksack, throttle chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
-		query := buildQuery(ds, &req).Columns(SELECT_GISTS...).Table(BEAN_AGGREGATES).Where(GIST_IS_NOT_NULL).Order(ORDER_BY_UPDATED)
-		beans := ds.QueryBeans(query)
+		req := c.MustGet("req").(*QueryRequest)
+		query := buildQuery(ds, req).
+			Columns(SELECT_GISTS...).
+			Table(BEAN_AGGREGATES).
+			Where(GIST_IS_NOT_NULL, HAS_CHATTERS).
+			Order(ORDER_BY_UPDATED)
+		// beans := ds.QueryBeans(query)
+		beans := runThrottledQuery(ds, query, req, throttle)
 		c.JSON(http.StatusOK, beans)
 	}
 }
 
-func createTrendingEmbeddingsHandler(ds *Ducksack) gin.HandlerFunc {
+func createTrendingEmbeddingsHandler(ds *Ducksack, throttle chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.MustGet("req").(QueryRequest)
-		query := buildQuery(ds, &req).Columns(SELECT_EMBEDDINGS...).Table(BEAN_AGGREGATES).Order(ORDER_BY_UPDATED)
-		beans := ds.QueryBeans(query)
+		req := c.MustGet("req").(*QueryRequest)
+		query := buildQuery(ds, req).
+			Columns(SELECT_EMBEDDINGS...).
+			Table(BEAN_AGGREGATES).
+			Where(HAS_CHATTERS).
+			Order(ORDER_BY_UPDATED)
+		// beans := ds.QueryBeans(query)
+		beans := runThrottledQuery(ds, query, req, throttle)
 		c.JSON(http.StatusOK, beans)
 	}
+}
+
+func runThrottledQuery(ds *Ducksack, query *SelectExpr, req *QueryRequest, throttle chan int) []Bean {
+	if req.Embedding != nil {
+		throttle <- 1
+	}
+	beans := ds.QueryBeans(query)
+	if req.Embedding != nil {
+		<-throttle
+	}
+	return beans
 }
 
 func buildQuery(ds *Ducksack, req *QueryRequest) *SelectExpr {

@@ -6,10 +6,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"log"
-	"runtime"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/marcboeker/go-duckdb/v2"
@@ -40,6 +40,7 @@ const (
 )
 
 const (
+	HAS_CHATTERS      = "shares != 0"
 	GIST_IS_NOT_NULL  = "gist IS NOT NULL"
 	ORDER_BY_DISTANCE = "distance ASC"
 	ORDER_BY_CREATED  = "created DESC"
@@ -55,15 +56,15 @@ type Ducksack struct {
 
 ////////// INITIALIZE DATABASE //////////
 
-func NewBeansack(dbpath string, initsql string, vectordim int, cluster_eps float64) *Ducksack {
-
-	conn, err := duckdb.NewConnector(fmt.Sprintf("%s?threads=%d", dbpath, max(1, runtime.NumCPU()-1)), nil)
+func NewBeansack(dbpath string, initsql string, vector_dimensions int, related_eps float64) *Ducksack {
+	// conn, err := duckdb.NewConnector(fmt.Sprintf("%s?threads=%d", dbpath, max(1, runtime.NumCPU()-1)), nil)
+	conn, err := duckdb.NewConnector(dbpath, nil)
 	noerror(err, "CONNECTOR ERROR")
 
 	// open connection
 	db := sql.OpenDB(conn)
 	if initsql != "" {
-		_, err = db.Exec(fmt.Sprintf(initsql, vectordim, cluster_eps))
+		_, err = db.Exec(fmt.Sprintf(initsql, vector_dimensions, related_eps))
 		noerror(err, "INIT SQL ERROR")
 	}
 
@@ -71,37 +72,40 @@ func NewBeansack(dbpath string, initsql string, vectordim int, cluster_eps float
 		connector: conn,
 		db:        db,
 		query:     sqlx.NewDb(db, "duckdb"),
-		dim:       vectordim,
+		dim:       vector_dimensions,
 	}
 }
 
 ////////// STORING FUNCTIONS //////////
-
-// func (ds *Ducksack) getAppender(table string) *duckdb.Appender {
-// 	conn, err := ds.connector.Connect(context.Background())
-// 	noerror(err)
-// 	appender, err := duckdb.NewAppenderFromConn(conn, "", table)
-// 	noerror(err)
-// 	return appender
-// }
 
 func appendToTable[T any](ds *Ducksack, table string, data []T, getfieldvalues func(item T) []driver.Value) int {
 	if data == nil {
 		return 0
 	}
 	conn, err := ds.connector.Connect(context.Background())
-	noerror(err, "CONNECTOR ERROR")
+	if err != nil {
+		logerrorf(err, "append failed: table=%s num_items=%d", table, len(data))
+		return -1
+	}
+
 	appender, err := duckdb.NewAppenderFromConn(conn, "", table)
-	noerror(err, "APPENDER ERROR")
+	if err != nil {
+		logerrorf(err, "append failed: table=%s num_items=%d", table, len(data))
+		return -1
+	}
 	defer appender.Close()
+
 	count := 0
+	errs := []error{}
 	for _, item := range data {
 		if err := appender.AppendRow(getfieldvalues(item)...); err != nil {
-			log.Println(err)
+			errs = append(errs, err)
 		} else {
 			count++
 		}
 	}
+	logwarningf(errors.Join(errs...), "append had errors: table=%s", table)
+	log.WithFields(log.Fields{"table": table, "num_items": count}).Info("append succeeded")
 	return count
 }
 
@@ -266,33 +270,45 @@ func mustIn(query string, args ...any) (string, []any) {
 	return query, args
 }
 
-func shouldIn(query string, args ...any) (string, []any, error) {
-	query, args, err := sqlx.In(query, args...)
-	logerror(err, "IN ERROR", query)
-	return query, args, err
-}
-
 func mustSelect[T any](ds *Ducksack, query string, args ...any) []T {
 	var data []T
-	noerror(ds.query.Select(&data, query, args...), "SELECT ERROR")
+	noerror(ds.query.Select(&data, query, args...), "query failed")
+	log.WithFields(log.Fields{"query": query, "params": len(args), "num_items": len(data)}).Info("query succeeded")
 	return data
+}
+
+func shouldIn(query string, args ...any) (string, []any, error) {
+	query, args, err := sqlx.In(query, args...)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{"query": query, "params": len(args)}).Error("query failed")
+	}
+	return query, args, err
 }
 
 func shouldSelect[T any](ds *Ducksack, query string, args ...any) ([]T, error) {
 	var data []T
 	err := ds.query.Select(&data, query, args...)
-	logerror(err, "SELECT ERROR", query)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{"query": query, "params": len(args)}).Error("query failed")
+	} else {
+		log.WithFields(log.Fields{"query": query, "params": len(args), "num_items": len(data)}).Info("query succeeded")
+	}
 	return data, err
 }
 
-func getBeans[T any](ds *Ducksack, sql string, urls []string) []T {
+func getBeans[T any](ds *Ducksack, query string, urls []string) []T {
 	if len(urls) == 0 {
 		return nil
 	}
-	query, args := mustIn(sql, urls)
-	var data []T
-	noerror(ds.query.Select(&data, query, args...), "SELECT ERROR")
-	return data
+	query, args, err := shouldIn(query, urls)
+	if err != nil {
+		return nil
+	}
+	beans, err := shouldSelect[T](ds, query, args...)
+	if err != nil {
+		return nil
+	}
+	return beans
 }
 
 ////////// DIRECT QUERY/GET FUNCTIONS //////////
@@ -554,7 +570,6 @@ func (ds *Ducksack) QueryBeans(query *SelectExpr) []Bean {
 	if err != nil {
 		return nil
 	}
-	log.Println(sql, len(params), len(beans))
 	return beans
 }
 
@@ -594,15 +609,14 @@ func (ds *Ducksack) DeleteBeans(wheres ...string) error {
 func (ds *Ducksack) DeleteChatters(wheres ...string) error {
 	where_sql := combineWhereExprs(wheres...)
 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_CHATTERS, where_sql))
-	logerror(err, "DELETE CHATTERS ERROR")
+	noerror(err, "DELETE CHATTERS ERROR")
 	return err
 }
 
 func (ds *Ducksack) DeleteSources(wheres ...string) error {
-
 	where_sql := combineWhereExprs(wheres...)
 	_, err := ds.db.Exec(fmt.Sprintf(_SQL_DELETE_SOURCES, where_sql))
-	logerror(err, "DELETE SOURCES ERROR")
+	noerror(err, "DELETE SOURCES ERROR")
 	return err
 }
 
@@ -725,16 +739,4 @@ func (ds *Ducksack) Execute(commands ...string) error {
 func (ds *Ducksack) Close() {
 	noerror(ds.query.Close(), "QUERY CLOSE ERROR")
 	noerror(ds.db.Close(), "DB CLOSE ERROR")
-}
-
-func noerror(err error, msg string) {
-	if err != nil {
-		log.Fatal(msg, ": ", err)
-	}
-}
-
-func logerror(err error, msg ...string) {
-	if err != nil {
-		log.Println(msg, err)
-	}
 }
