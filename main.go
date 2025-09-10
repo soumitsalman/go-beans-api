@@ -85,5 +85,5 @@ func main() {
 	engine := NewEngine(db_path, string(init), dim, related_eps, throttle_max, refresh_time)
 	defer engine.Close()
 
-	noerror(engine.Run(":"+port), "SERVER ERROR")
+	noerror(engine.Run("0.0.0.0:"+port), "SERVER ERROR")
 }

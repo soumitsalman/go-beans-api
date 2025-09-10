@@ -114,7 +114,7 @@ ORDER BY distance;
 
 CREATE VIEW IF NOT EXISTS aggregated_beans_view AS
 SELECT
-    b.url, b.kind, b.title, b.title_length, b.summary, b.summary_length, b.author, b.source, b.created,
+    b.url, b.kind, b.title, b.title_length, b.content, b.content_length, b.summary, b.summary_length, b.author, b.source, b.created,
     e.embedding,
     g.gist,    
     COALESCE(ch.collected, b.created) as updated,
@@ -127,10 +127,10 @@ SELECT
     r.regions,
     n.entities
 FROM bean_cores b
-INNER JOIN bean_embeddings e ON b.url = e.url
-INNER JOIN bean_gists g ON b.url = g.url
+LEFT JOIN bean_embeddings e ON b.url = e.url
+LEFT JOIN bean_gists g ON b.url = g.url
 LEFT JOIN bean_chatters ch ON b.url = ch.url
-INNER JOIN (
+LEFT JOIN (
 	SELECT url, LIST(DISTINCT category) as categories FROM bean_categories GROUP BY url
 ) as c ON b.url = c.url
 LEFT JOIN (
@@ -142,14 +142,3 @@ LEFT JOIN (
 LEFT JOIN (
 	SELECT url, LIST(DISTINCT entity) as entities FROM bean_entities GROUP BY url
 ) as n ON b.url = n.url;
-
-CREATE VIEW IF NOT EXISTS untagged_beans_view AS
-SELECT * EXCLUDE(e.url, g.url) FROM bean_cores b
-LEFT JOIN bean_embeddings e ON b.url = e.url
-LEFT JOIN bean_gists g ON b.url = g.url
-WHERE gist IS NULL OR embedding IS NULL;
-
-CREATE TABLE IF NOT EXISTS aggregated_beans AS 
-SELECT * FROM aggregated_beans_view;
-
-DROP VIEW IF EXISTS bean_aggregates;

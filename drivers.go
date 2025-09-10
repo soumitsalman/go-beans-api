@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/jmoiron/sqlx"
 	duckdb "github.com/marcboeker/go-duckdb/v2"
@@ -22,12 +23,15 @@ func NewDuckSack(dbpath string, initsql string, vector_dimensions int, related_e
 		noerror(err, "INIT SQL ERROR")
 	}
 
-	return &BeanSack{
-		connector: conn,
-		db:        db,
-		query:     sqlx.NewDb(db, "duckdb"),
-		dim:       vector_dimensions,
+	sack := &BeanSack{
+		connector:     conn,
+		db:            db,
+		query:         sqlx.NewDb(db, "duckdb"),
+		dim:           vector_dimensions,
+		needs_refresh: atomic.Bool{},
 	}
+	sack.needs_refresh.Store(true)
+	return sack
 }
 
 func NewSqliteSack(dbpath string, initsql string, vector_dimensions int, related_eps float64) *BeanSack {
@@ -38,10 +42,12 @@ func NewSqliteSack(dbpath string, initsql string, vector_dimensions int, related
 		noerror(err, "INIT SQL ERROR")
 	}
 
-	return &BeanSack{
+	sack := &BeanSack{
 		connector: nil,
 		db:        db,
 		query:     sqlx.NewDb(db, "sqlite3"),
 		dim:       vector_dimensions,
 	}
+	sack.needs_refresh.Store(true)
+	return sack
 }

@@ -28,6 +28,8 @@ func NewEngine(datapath string, init_sql string, vector_dimensions int, related_
 }
 
 func (eng *BeanSackEngine) Run(addr string) error {
+	go eng.ds.Refresh()
+
 	ticker := time.NewTicker(time.Duration(eng.refresh_time) * time.Minute)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
