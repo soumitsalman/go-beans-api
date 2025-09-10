@@ -31,12 +31,13 @@ COPY --from=flyio/litefs:0.5 /usr/local/bin/litefs /usr/local/bin/litefs
 
 # Create directory for SQLite database
 RUN mkdir -p /data
+RUN mkdir -p .logs
 
 ENV VECTOR_DIMENSIONS=384
 ENV RELATED_EPS=0.43
 ENV PORT=8080
 ENV DATA=/data
-ENV MAX_CONCURRENT_QUERIES=2
+ENV MAX_CONCURRENT_QUERIES=1
 ENV REFRESH_TIME=3
 ENV GIN_MODE=release
 

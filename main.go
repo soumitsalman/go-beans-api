@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -20,9 +21,14 @@ const (
 )
 
 func main() {
+	// set logging stuff
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
 	})
+	log_file_path := fmt.Sprintf(".logs/beansack-%s.log", time.Now().Format("2006-01-02-15-04-05"))
+	log_file, err := os.OpenFile(log_file_path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	noerror(err, "LOG FILE ERROR")
+	log.SetOutput(log_file)
 
 	// Load configuration from environment variables
 	// Read the configuration parameters

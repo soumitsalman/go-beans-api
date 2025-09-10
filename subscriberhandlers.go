@@ -14,11 +14,10 @@ const (
 	MAX_LIMIT     int = 512
 )
 
-const CORE_FIELDS_ONLY = "* EXCLUDE (embedding, gist)"
-
-var PUBLIC_FIELDS = []string{"url", "kind", "title", "summary", "author", "source", "created", "categories", "sentiments", "regions", "entities", "updated", "likes", "comments", "shares"}
-var TAG_FIELDS = []string{"url", "created", "updated", "gist", "categories", "sentiments", "regions", "entities"}
-var EMBEDDING_FIELDS = []string{"url", "created", "updated", "embedding"}
+const PUBLIC_FIELDS = "url, kind, title, summary, author, source, created, updated, likes, comments, subscribers, shares, categories, sentiments, regions, entities"
+const CONTENT_FIELDS = "url, kind, title, content, summary, created"
+const DIGEST_FIELDS = "url, created, gist, categories, sentiments, regions, entities"
+const EMBEDDING_FIELDS = "url, created, embedding"
 
 type QueryRequest struct {
 	// these custom fields. some of these can be passed as a query params
@@ -69,13 +68,64 @@ func validateQueryRequest(c *gin.Context) {
 func createLatestBeansHandler(ds *BeanSack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(*QueryRequest)
-		order_by := ORDER_BY_CREATED
-		if len(req.Embedding) > 0 {
-			order_by = ORDER_BY_DISTANCE
-		}
-		query := buildQuery(ds, req).Columns(PUBLIC_FIELDS...).Table(AGGREGATES_BEANS).Order(order_by)
+		// order_by := ORDER_BY_CREATED
+		// if len(req.Embedding) > 0 {
+		// 	order_by = ORDER_BY_DISTANCE
+		// }
+		query := buildQuery(ds, req).
+			Columns(PUBLIC_FIELDS).
+			Table(AGGREGATES_BEANS).
+			Order(ORDER_BY_CREATED)
 		beans := ds.QueryBeans(query)
 		c.JSON(http.StatusOK, beans)
+	}
+}
+
+func createTrendingBeansHandler(ds *BeanSack) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := c.MustGet("req").(*QueryRequest)
+		query := buildQuery(ds, req).
+			Columns(PUBLIC_FIELDS).
+			Table(AGGREGATES_BEANS).
+			Where(HAS_CHATTERS).
+			Order(ORDER_BY_UPDATED)
+		beans := ds.QueryBeans(query)
+		c.JSON(http.StatusOK, beans)
+	}
+}
+
+func createTrendingDigestsHandler(ds *BeanSack) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := c.MustGet("req").(*QueryRequest)
+		query := buildQuery(ds, req).
+			Columns(DIGEST_FIELDS).
+			Table(AGGREGATES_BEANS).
+			Where(GIST_IS_NOT_NULL, HAS_CHATTERS).
+			Order(ORDER_BY_UPDATED)
+		beans := ds.QueryBeans(query)
+		c.JSON(http.StatusOK, beans)
+	}
+}
+
+func createExistsHandler(ds *BeanSack) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := c.MustGet("req").(*QueryRequest)
+		if len(req.URLs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "urls is required"})
+			return
+		}
+		c.JSON(http.StatusOK, ds.Exists(req.URLs))
+	}
+}
+
+func createEmbeddingsHandler(ds *BeanSack) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := c.MustGet("req").(*QueryRequest)
+		if len(req.URLs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "urls is required"})
+			return
+		}
+		c.JSON(http.StatusOK, ds.GetEmbeddings(req.URLs))
 	}
 }
 
@@ -123,6 +173,17 @@ func createCategoriesHandler(ds *BeanSack) gin.HandlerFunc {
 	}
 }
 
+func createSentimentsHandler(ds *BeanSack) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := c.MustGet("req").(*QueryRequest)
+		if len(req.URLs) > 0 {
+			c.JSON(http.StatusOK, ds.GetSentiments(req.URLs))
+		} else {
+			c.JSON(http.StatusOK, ds.DistinctSentiments())
+		}
+	}
+}
+
 func createSourcesHandler(ds *BeanSack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(*QueryRequest)
@@ -136,18 +197,11 @@ func createSourcesHandler(ds *BeanSack) gin.HandlerFunc {
 
 ////////// PRIVILEGED //////////
 
-func createExistsHandler(ds *BeanSack) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		req := c.MustGet("req").(*QueryRequest)
-		c.JSON(http.StatusOK, ds.Exists(req.URLs))
-	}
-}
-
 func createLatestUntaggedBeansHandler(ds *BeanSack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(*QueryRequest)
 		query := buildQuery(ds, req).
-			Columns(CORE_FIELDS_ONLY).
+			Columns(CONTENT_FIELDS).
 			Table(UNTAGGED_BEANS).
 			Order(ORDER_BY_CREATED)
 		beans := ds.QueryBeans(query)
@@ -155,43 +209,7 @@ func createLatestUntaggedBeansHandler(ds *BeanSack) gin.HandlerFunc {
 	}
 }
 
-func createTrendingBeansHandler(ds *BeanSack) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		req := c.MustGet("req").(*QueryRequest)
-		query := buildQuery(ds, req).
-			Table(AGGREGATES_BEANS).
-			Where(HAS_CHATTERS).
-			Order(ORDER_BY_UPDATED)
-		beans := ds.QueryBeans(query)
-		c.JSON(http.StatusOK, beans)
-	}
-}
-
-func createTrendingTagsHandler(ds *BeanSack) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		req := c.MustGet("req").(*QueryRequest)
-		query := buildQuery(ds, req).
-			Columns(TAG_FIELDS...).
-			Table(AGGREGATES_BEANS).
-			Where(GIST_IS_NOT_NULL, HAS_CHATTERS).
-			Order(ORDER_BY_UPDATED)
-		beans := ds.QueryBeans(query)
-		c.JSON(http.StatusOK, beans)
-	}
-}
-
-func createTrendingEmbeddingsHandler(ds *BeanSack) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		req := c.MustGet("req").(*QueryRequest)
-		query := buildQuery(ds, req).
-			Columns(EMBEDDING_FIELDS...).
-			Table(AGGREGATES_BEANS).
-			Where(HAS_CHATTERS).
-			Order(ORDER_BY_UPDATED)
-		beans := ds.QueryBeans(query)
-		c.JSON(http.StatusOK, beans)
-	}
-}
+//////// HELPERS ///////
 
 func buildQuery(ds *BeanSack, req *QueryRequest) *SelectExpr {
 	query := NewSelect(ds).

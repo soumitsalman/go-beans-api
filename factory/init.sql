@@ -152,8 +152,4 @@ WHERE gist IS NULL OR embedding IS NULL;
 CREATE TABLE IF NOT EXISTS aggregated_beans AS 
 SELECT * FROM aggregated_beans_view;
 
--- CREATE TABLE IF NOT EXISTS untagged_beans AS 
--- SELECT * FROM untagged_beans_view;
-
-
--- CREATE TABLE IF NOT EXISTS bean_clusters AS SELECT * FROM bean_clusters_view;
+DROP VIEW IF EXISTS bean_aggregates;

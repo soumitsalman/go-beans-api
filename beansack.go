@@ -79,6 +79,27 @@ func (ds *BeanSack) StoreEmbeddings(beans []Bean) int {
 	return count
 }
 
+func (ds *BeanSack) StoreTags(beans []Bean) int {
+	tags := prepareTags(beans)
+	count := 0
+	if categories, ok := tags[BEAN_CATEGORIES]; ok {
+		count += ds.storeTagsToTable(categories, BEAN_CATEGORIES)
+	}
+	if sentiments, ok := tags[BEAN_SENTIMENTS]; ok {
+		count += ds.storeTagsToTable(sentiments, BEAN_SENTIMENTS)
+	}
+	if regions, ok := tags[BEAN_REGIONS]; ok {
+		count += ds.storeTagsToTable(regions, BEAN_REGIONS)
+	}
+	if entities, ok := tags[BEAN_ENTITIES]; ok {
+		count += ds.storeTagsToTable(entities, BEAN_ENTITIES)
+	}
+	if gist, ok := tags[BEAN_GISTS]; ok {
+		count += ds.storeTagsToTable(gist, BEAN_GISTS)
+	}
+	return count
+}
+
 func (ds *BeanSack) StoreChatters(chatters []Chatter) int {
 	chatters = prepareChatters(chatters)
 	count := appendToTable(ds, CHATTERS, chatters, func(chatter Chatter) []driver.Value {
@@ -218,27 +239,6 @@ func (ds *BeanSack) storeTagsToTable(tags []TagData, tag_table string) int {
 	})
 }
 
-func (ds *BeanSack) StoreTags(beans []Bean) int {
-	tags := prepareTags(beans)
-	count := 0
-	if categories, ok := tags[BEAN_CATEGORIES]; ok {
-		count += ds.storeTagsToTable(categories, BEAN_CATEGORIES)
-	}
-	if sentiments, ok := tags[BEAN_SENTIMENTS]; ok {
-		count += ds.storeTagsToTable(sentiments, BEAN_SENTIMENTS)
-	}
-	if regions, ok := tags[BEAN_REGIONS]; ok {
-		count += ds.storeTagsToTable(regions, BEAN_REGIONS)
-	}
-	if entities, ok := tags[BEAN_ENTITIES]; ok {
-		count += ds.storeTagsToTable(entities, BEAN_ENTITIES)
-	}
-	if gist, ok := tags[BEAN_GISTS]; ok {
-		count += ds.storeTagsToTable(gist, BEAN_GISTS)
-	}
-	return count
-}
-
 func prepareChatters(chatters []Chatter) []Chatter {
 	now := time.Now()
 	for i := range chatters {
@@ -250,17 +250,12 @@ func prepareChatters(chatters []Chatter) []Chatter {
 }
 
 const _REFRESH_AGGREGATES = `
-DROP TABLE IF EXISTS aggregated_beans;
-CREATE TABLE IF NOT EXISTS aggregated_beans AS 
-SELECT * FROM aggregated_beans_view;
-
--- DROP TABLE IF EXISTS untagged_beans;
--- CREATE TABLE IF NOT EXISTS untagged_beans AS 
--- SELECT * FROM untagged_beans_view;
+TRUNCATE TABLE aggregated_beans;
+INSERT INTO aggregated_beans SELECT * FROM aggregated_beans_view;
 `
 
 func (ds *BeanSack) Refresh() {
-	log.Info("REFRESH TRIGGERED")
+	log.Info("refresh triggered")
 	if ds.needs_refresh.Load() {
 		_, err := ds.db.Exec(_REFRESH_AGGREGATES)
 		if err != nil {
@@ -572,7 +567,6 @@ func (ds *BeanSack) QueryAggregatedBeans(
 
 func (ds *BeanSack) QueryBeans(query *SelectExpr) []Bean {
 	sql, params := query.ToSQL()
-	fmt.Println(sql)
 	sql, params, err := shouldIn(sql, params...)
 	if err != nil {
 		return nil

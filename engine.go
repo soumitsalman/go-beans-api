@@ -60,12 +60,18 @@ func initRoutes(eng *BeanSackEngine) {
 	// everything sorted by created_at DESC
 	public := eng.router.Group("/public/beans", validateQueryRequest)
 	{
-		public.GET("/latest", enter_throttle, createLatestBeansHandler(eng.ds), exit_throttle)
+		// these are composite queries
+		public.GET("/latest", createLatestBeansHandler(eng.ds))
+		public.GET("/trending", createTrendingBeansHandler(eng.ds))
+		public.GET("/trending/digests", createTrendingDigestsHandler(eng.ds))
+		// these are query by URL
 		public.GET("/exists", createExistsHandler(eng.ds))
+		public.GET("/embeddings", createEmbeddingsHandler(eng.ds))
 		public.GET("/related", createRelatedBeansHandler(eng.ds))
+		public.GET("/categories", createCategoriesHandler(eng.ds))
+		public.GET("/sentiments", createSentimentsHandler(eng.ds))
 		public.GET("/regions", createRegionsHandler(eng.ds))
 		public.GET("/entities", createEntitiesHandler(eng.ds))
-		public.GET("/categories", createCategoriesHandler(eng.ds))
 		public.GET("/sources", createSourcesHandler(eng.ds))
 	}
 
@@ -73,11 +79,9 @@ func initRoutes(eng *BeanSackEngine) {
 	// everything sorted by trending DESC
 	privileged := eng.router.Group("/privileged/beans", createAuthVerificationHandler("PRIVILEGED_KEY"), validateQueryRequest, enter_throttle)
 	{
-		privileged.GET("/latest/untagged", createLatestUntaggedBeansHandler(eng.ds), exit_throttle)
-		privileged.GET("/trending", createTrendingBeansHandler(eng.ds), exit_throttle)
-		privileged.GET("/trending/tags", createTrendingTagsHandler(eng.ds), exit_throttle)
-		privileged.GET("/trending/embeddings", createTrendingEmbeddingsHandler(eng.ds), exit_throttle)
+		privileged.GET("/untagged", createLatestUntaggedBeansHandler(eng.ds), exit_throttle)
 	}
+
 	// PUBLISHER ENDPOINTS
 	publisher := eng.router.Group("/publisher", createAuthVerificationHandler("PUBLISHER_KEY"))
 	{
@@ -119,14 +123,14 @@ func createAuthVerificationHandler(expectedKeyName string) gin.HandlerFunc {
 
 func createEnterThrottle(throttler chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// query_throttler <- 1
+		throttler <- 1
 		c.Next()
 	}
 }
 
 func createExitThrottle(throttler chan int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// <-query_throttler
+		<-throttler
 		c.Next()
 	}
 }
