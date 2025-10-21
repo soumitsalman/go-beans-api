@@ -3,18 +3,26 @@ package main
 import (
 	"os"
 
-	"github.com/joho/godotenv"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
-	DEFAULT_DB_PATH     = ""
-	DEFAULT_VECTOR_DIM  = 384
-	DEFAULT_CLUSTER_EPS = 0.43
+	DEFAULT_DB_PATH                = ""
+	DEFAULT_VECTOR_DIM             = 384
+	DEFAULT_RELATED_EPS            = 0.43
+	DEFAULT_PORT                   = "8080"
+	DEFAULT_MAX_CONCURRENT_QUERIES = 2
+	DEFAULT_REFRESH_TIME           = 5 // in minutes
+	DB_NAME                        = "beansack.db"
 )
 
 func main() {
+	// set logging stuff
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
+
 	// Load configuration from environment variables
-	godotenv.Load(".env")
 	// Read the configuration parameters
 	catalog_path, ok := os.LookupEnv("CATALOG_PATH")
 	if !ok {
@@ -29,9 +37,8 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = DEFAULT_PORT
 	}
 
-	r := setupRoutes(ds)
-	noerror(r.Run(":"+port), "SERVER ERROR")
+	noerror(engine.Run("0.0.0.0:"+port), "SERVER ERROR")
 }
