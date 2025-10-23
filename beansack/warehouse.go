@@ -33,19 +33,18 @@ const (
 
 const (
 	ORDER_BY_DISTANCE = "distance ASC"
-	ORDER_BY_TRENDING = "DATE(updated) DESC, comments DESC, likes DESC, shares DESC"
+	ORDER_BY_TRENDING = "updated DESC, comments DESC, likes DESC"
 	ORDER_BY_LATEST   = "created DESC"
 )
 
 const SQL_INIT = `
 INSTALL ducklake;
 LOAD ducklake;
-
 INSTALL postgres;
 LOAD postgres;
 
 SET threads=1;
-SET memory_limit='2GB';
+-- SET memory_limit='3GB';
 
 ATTACH 'ducklake:%s' AS warehouse (DATA_PATH '%s');
 USE warehouse;
