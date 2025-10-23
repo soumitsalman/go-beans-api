@@ -1,5 +1,8 @@
 *.env
+*.out
 *.log
-*.cache
-*.db
-*.ducklake
+.logs
+.cache
+.db
+.ducklake
+.beansack

@@ -7,9 +7,9 @@ RUN apt-get update && apt-get install -y \
     g++ \
     build-essential \
     ca-certificates \
-    fuse3 \
-    sqlite3 \
-    libsqlite3-dev \
+    # fuse3 \
+    # sqlite3 \
+    # libsqlite3-dev \
     libstdc++-12-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,10 +27,10 @@ RUN go mod download
 RUN CGO_ENABLED=1 GOOS=linux go build -o beansackapi .
 
 # Create directory for SQLite database
-RUN mkdir -p /data
+RUN mkdir -p /app/data
 
 ENV PORT=8080
-ENV STORAGE_DATAPATH=/data
+ENV STORAGE_DATAPATH=/app/data
 ENV MAX_CONCURRENT_QUERIES=2
 ENV GIN_MODE=release
 

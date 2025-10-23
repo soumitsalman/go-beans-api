@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  gobeansack:
+    build: .
+    image: gobeansack:local
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./.beansack:/app/data
+    environment:
+      - PORT=8080
+      - PG_CONNECTION_STRING=postgresql://postgres:localpass@localpostgres:5432/beansackdb
+      - API_KEY=yomomma
+    depends_on:
+      - localpostgres
+    networks:
+      - beansack-net
+
+  localpostgres:
+    image: postgres:17-alpine
+    ports:
+      - "15432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: localpass
+      POSTGRES_DB: beansackdb
+    volumes:
+      - ./.beansack/postgres:/var/lib/postgresql/data
+    networks:
+      - beansack-net
+
+networks:
+  beansack-net:
+    driver: bridge

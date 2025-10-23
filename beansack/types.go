@@ -57,7 +57,7 @@ type Bean struct {
 	Source            string       `db:"source" json:"source,omitempty"`
 	ImageUrl          string       `db:"image_url" bson:"image_url" json:"image_url,omitempty"`
 	Created           time.Time    `db:"created" bson:"created" json:"created,omitempty"`
-	Collected         time.Time    `db:"collected" bson:"collected" json:"collected,omitempty"`
+	Collected         time.Time    `db:"collected" bson:"collected" json:"-"`
 	Embedding         Float32Array `db:"embedding" json:"embedding,omitempty"`
 	Categories        StringArray  `db:"categories" json:"categories,omitempty"`
 	Sentiments        StringArray  `db:"sentiments" json:"sentiments,omitempty"`

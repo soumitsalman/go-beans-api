@@ -85,7 +85,7 @@ type Beansack struct {
 }
 
 // NewBeansack creates a new Beansack connection and executes initialization SQL.
-func NewReadonlyBeansack(catalogdb, storagedb string) *Beansack {
+func NewReadonlyBeansack(catalogdb, storagedb string) (*Beansack, error) {
 	if strings.HasPrefix(catalogdb, "postgresql://") {
 		catalogdb = "postgres:" + catalogdb
 	}
@@ -95,21 +95,21 @@ func NewReadonlyBeansack(catalogdb, storagedb string) *Beansack {
 	// Open DuckDB via database/sql. The driver registers itself with the name "duckdb".
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		LogError(err, "db driver failed")
-		return nil
+		LogError(err, "DB driver failed")
+		return nil, err
 	}
 	// Execute init SQL. Use Exec which can run multiple statements when supported by driver.
 	if _, err := db.Exec(init_sql); err != nil {
 		db.Close()
-		LogError(err, "db connection failed")
-		return nil
+		LogError(err, "DB connection failed")
+		return nil, err
 	}
 
-	log.Printf("db initialized.")
+	log.Printf("DB initialized")
 	return &Beansack{
 		db:  db,
 		dbx: sqlx.NewDb(db, "duckdb"),
-	}
+	}, nil
 }
 
 // query syntax builder
@@ -463,7 +463,7 @@ func (db *Beansack) Close() error {
 	}
 	err := db.dbx.Close()
 	if err == nil {
-		log.Printf("Database connection closed.")
+		log.Printf("DB connection closed.")
 	}
 	return err
 }

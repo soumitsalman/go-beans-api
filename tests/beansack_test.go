@@ -16,7 +16,9 @@ var testCtx = context.Background()
 func setupTestDB() *bs.Beansack {
 	catalog := "postgresql://postgres:localpass@localhost:5432/beansackdb"
 	storage := "/home/soumitsr/codes/gobeansack/.beansack/"
-	return bs.NewReadonlyBeansack(catalog, storage)
+	db, err := bs.NewReadonlyBeansack(catalog, storage)
+	bs.NoError(err)
+	return db
 }
 
 func TestQueryDistinctValues(t *testing.T) {

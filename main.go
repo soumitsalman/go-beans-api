@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
+	"github.com/k0kubun/pp"
 	log "github.com/sirupsen/logrus"
 	bs "github.com/soumitsalman/gobeansack/beansack"
 	r "github.com/soumitsalman/gobeansack/router"
@@ -29,11 +30,27 @@ func main() {
 	if !ok {
 		catalog_path = DEFAULT_DB_PATH
 	}
+	pp.Println(catalog_path)
 	storage_path, ok := os.LookupEnv("STORAGE_DATAPATH")
 	if !ok {
 		storage_path = DEFAULT_DB_PATH
 	}
-	db := bs.NewReadonlyBeansack(catalog_path, storage_path)
+	// enumerate up to 5 entries in storage_path/main/bean_cores (no IsDir check, no slice)
+	beanCoresPath := storage_path + "/main/bean_cores"
+	entries, err := os.ReadDir(beanCoresPath)
+	bs.LogWarning(err, "Unable to read bean_cores directory, continuing")
+
+	pp.Println("bean_cores (up to 5):")
+	count := 0
+	for _, e := range entries {
+		pp.Println(e.Name())
+		count++
+		if count == 5 {
+			break
+		}
+	}
+	db, err := bs.NewReadonlyBeansack(catalog_path, storage_path)
+	bs.NoError(err)
 	defer db.Close()
 
 	port := os.Getenv("PORT")

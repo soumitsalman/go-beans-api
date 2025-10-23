@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/k0kubun/pp"
 	bs "github.com/soumitsalman/gobeansack/beansack"
 )
 
@@ -73,7 +72,6 @@ func createRelatedBeansHandler(db *bs.Beansack) gin.HandlerFunc {
 func createRegionsHandler(db *bs.Beansack) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
-		pp.Println(req, db)
 		if len(req.URLs) > 0 {
 			c.JSON(http.StatusOK, db.GetRegions(req.URLs))
 		} else {
