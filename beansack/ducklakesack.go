@@ -18,8 +18,6 @@ const (
 	BEAN_CATEGORIES = "computed_bean_categories"
 	BEAN_SENTIMENTS = "computed_bean_sentiments"
 	BEAN_GISTS      = "bean_gists"
-	PUBLISHERS      = "publishers"
-	CHATTERS        = "chatters"
 	PROCESSED_BEANS = "processed_beans_view"
 	LATEST_BEANS    = "latest_beans_view"
 	TRENDING_BEANS  = "trending_beans_view"
@@ -79,13 +77,13 @@ FROM latest_beans_view b
 INNER JOIN bean_chatters_view ch ON b.url = ch.url;
 `
 
-type Beansack struct {
+type Ducklake struct {
 	db  *sql.DB
 	dbx *sqlx.DB
 }
 
 // NewBeansack creates a new Beansack connection and executes initialization SQL.
-func NewReadonlyBeansack(catalogdb, storagedb string) (*Beansack, error) {
+func NewReadonlyBeansack(catalogdb, storagedb string) (*Ducklake, error) {
 	if strings.HasPrefix(catalogdb, "postgresql://") {
 		catalogdb = "postgres:" + catalogdb
 	}
@@ -106,7 +104,7 @@ func NewReadonlyBeansack(catalogdb, storagedb string) (*Beansack, error) {
 	}
 
 	log.Printf("DB initialized")
-	return &Beansack{
+	return &Ducklake{
 		db:  db,
 		dbx: sqlx.NewDb(db, "duckdb"),
 	}, nil
@@ -258,20 +256,20 @@ func shouldIn(query string, args ...any) (string, []any, error) {
 	return query, args, err
 }
 
-func mustSelect[T any](db *Beansack, query string, args ...any) []T {
+func mustSelect[T any](db *Ducklake, query string, args ...any) []T {
 	var data []T
 	NoError(db.dbx.Select(&data, query, args...), "SELECT error")
 	return data
 }
 
-func shouldSelect[T any](db *Beansack, query string, args ...any) ([]T, error) {
+func shouldSelect[T any](db *Ducklake, query string, args ...any) ([]T, error) {
 	var data []T
 	err := db.dbx.Select(&data, query, args...)
 	LogError(err, "SELECT error")
 	return data, err
 }
 
-func getItems[T any](db *Beansack, sql string, ids []string) []T {
+func getItems[T any](db *Ducklake, sql string, ids []string) []T {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -286,7 +284,7 @@ func getItems[T any](db *Beansack, sql string, ids []string) []T {
 	return items
 }
 
-func (db *Beansack) queryBeans(
+func (db *Ducklake) queryBeans(
 	table string,
 	urls []string,
 	kinds []string,
@@ -370,31 +368,31 @@ func (db *Beansack) queryBeans(
 
 ////////// DIRECT QUERY/GET FUNCTIONS //////////
 
-func (db *Beansack) GetEmbeddings(urls []string) []Bean {
+func (db *Ducklake) GetEmbeddings(urls []string) []Bean {
 	return getItems[Bean](db, "SELECT * FROM warehouse.bean_embeddings WHERE url IN (?);", urls)
 }
 
-func (db *Beansack) GetGists(urls []string) []Bean {
+func (db *Ducklake) GetGists(urls []string) []Bean {
 	return getItems[Bean](db, "SELECT * FROM warehouse.bean_gists WHERE url IN (?);", urls)
 }
 
-func (db *Beansack) GetRegions(urls []string) []Bean {
+func (db *Ducklake) GetRegions(urls []string) []Bean {
 	return getItems[Bean](db, `SELECT url, regions FROM warehouse.bean_gists WHERE url IN (?);`, urls)
 }
 
-func (db *Beansack) GetEntities(urls []string) []Bean {
+func (db *Ducklake) GetEntities(urls []string) []Bean {
 	return getItems[Bean](db, `SELECT url, entities FROM warehouse.bean_gists WHERE url IN (?);`, urls)
 }
 
-func (db *Beansack) GetCategories(urls []string) []Bean {
+func (db *Ducklake) GetCategories(urls []string) []Bean {
 	return getItems[Bean](db, `SELECT * FROM warehouse.computed_bean_categories WHERE url IN (?);`, urls)
 }
 
-func (db *Beansack) GetSentiments(urls []string) []Bean {
+func (db *Ducklake) GetSentiments(urls []string) []Bean {
 	return getItems[Bean](db, `SELECT * FROM warehouse.computed_bean_sentiments WHERE url IN (?);`, urls)
 }
 
-func (db *Beansack) GetRelated(urls []string) []Bean {
+func (db *Ducklake) GetRelated(urls []string) []Bean {
 	const _SQL_QUERY_CLUSTERS = `
 	SELECT url, LIST(DISTINCT related) AS related 
 	FROM warehouse.computed_bean_clusters 
@@ -403,50 +401,50 @@ func (db *Beansack) GetRelated(urls []string) []Bean {
 	return getItems[Bean](db, _SQL_QUERY_CLUSTERS, urls)
 }
 
-func (db *Beansack) GetChatters(urls []string) []Chatter {
+func (db *Ducklake) GetChatters(urls []string) []Chatter {
 	return getItems[Chatter](db, "SELECT * FROM warehouse.chatters WHERE url IN (?);", urls)
 }
 
-func (db *Beansack) GetBeanChatters(urls []string) []BeanChatter {
+func (db *Ducklake) GetBeanChatters(urls []string) []BeanChatter {
 	return getItems[BeanChatter](db, "SELECT * FROM warehouse.bean_chatters_view WHERE url IN (?);", urls)
 }
 
-func (db *Beansack) GetSources(urls []string) []Bean {
+func (db *Ducklake) GetSources(urls []string) []Bean {
 	return getItems[Bean](db, "SELECT url, source FROM warehouse.bean_cores WHERE url IN (?);", urls)
 }
 
-func (db *Beansack) GetPublishers(sources []string) []Publisher {
+func (db *Ducklake) GetPublishers(sources []string) []Publisher {
 	return getItems[Publisher](db, "SELECT * FROM warehouse.publishers WHERE source IN (?);", sources)
 }
 
 // //////// DISTINCT ITEMS //////////
-func (db *Beansack) DistinctRegions() []string {
+func (db *Ducklake) DistinctRegions() []string {
 	const _SQL_GET_ALL_REGIONS = `SELECT DISTINCT unnest(regions) as region FROM warehouse.bean_gists;`
 	return mustSelect[string](db, _SQL_GET_ALL_REGIONS)
 }
 
-func (db *Beansack) DistinctEntities() []string {
+func (db *Ducklake) DistinctEntities() []string {
 	const _SQL_GET_ALL_ENTITIES = `SELECT DISTINCT unnest(entities) as entity FROM warehouse.bean_gists;`
 	return mustSelect[string](db, _SQL_GET_ALL_ENTITIES)
 }
 
-func (db *Beansack) DistinctCategories() []string {
+func (db *Ducklake) DistinctCategories() []string {
 	const _SQL_GET_ALL_CATEGORIES = `SELECT DISTINCT unnest(categories) as category FROM warehouse.computed_bean_categories;`
 	return mustSelect[string](db, _SQL_GET_ALL_CATEGORIES)
 }
 
-func (db *Beansack) DistinctSentiments() []string {
+func (db *Ducklake) DistinctSentiments() []string {
 	const _SQL_GET_ALL_SENTIMENTS = `SELECT DISTINCT unnest(sentiments) as sentiment FROM warehouse.computed_bean_sentiments;`
 	return mustSelect[string](db, _SQL_GET_ALL_SENTIMENTS)
 }
 
-func (db *Beansack) DistinctSources() []string {
+func (db *Ducklake) DistinctSources() []string {
 	const _SQL_GET_ALL_SOURCES = `SELECT DISTINCT source FROM warehouse.bean_cores;`
 	return mustSelect[string](db, _SQL_GET_ALL_SOURCES)
 }
 
 // //////// COMPOSITE QUERIES ///////////
-func (db *Beansack) QueryLatestBeans(
+func (db *Ducklake) QueryLatestBeans(
 	urls []string,
 	kinds []string,
 	authors, sources []string,
@@ -474,7 +472,7 @@ func (db *Beansack) QueryLatestBeans(
 	)
 }
 
-func (db *Beansack) QueryTrendingBeans(
+func (db *Ducklake) QueryTrendingBeans(
 	urls []string,
 	kinds []string,
 	authors, sources []string,
@@ -501,7 +499,7 @@ func (db *Beansack) QueryTrendingBeans(
 	)
 }
 
-func (db *Beansack) Close() error {
+func (db *Ducklake) Close() error {
 	if db == nil || db.dbx == nil {
 		return nil
 	}

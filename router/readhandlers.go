@@ -58,7 +58,7 @@ func validateBeansQueryRequest(c *gin.Context) {
 	c.Next()
 }
 
-func createRelatedBeansHandler(db *bs.Beansack) gin.HandlerFunc {
+func createRelatedBeansHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		if len(req.URLs) == 0 {
@@ -69,7 +69,7 @@ func createRelatedBeansHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createRegionsHandler(db *bs.Beansack) gin.HandlerFunc {
+func createRegionsHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		if len(req.URLs) > 0 {
@@ -80,7 +80,7 @@ func createRegionsHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createEntitiesHandler(db *bs.Beansack) gin.HandlerFunc {
+func createEntitiesHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		if len(req.URLs) > 0 {
@@ -91,7 +91,7 @@ func createEntitiesHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createCategoriesHandler(db *bs.Beansack) gin.HandlerFunc {
+func createCategoriesHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		if len(req.URLs) > 0 {
@@ -102,7 +102,7 @@ func createCategoriesHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createSourcesHandler(db *bs.Beansack) gin.HandlerFunc {
+func createSourcesHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		if len(req.Sources) > 0 {
@@ -113,7 +113,7 @@ func createSourcesHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createLatestBeansHandler(db *bs.Beansack) gin.HandlerFunc {
+func createLatestBeansHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		beans, err := findBeans(db, "latest", req, bs.DEFAULT_COLUMNS)
@@ -125,7 +125,7 @@ func createLatestBeansHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createTrendingBeansHandler(db *bs.Beansack) gin.HandlerFunc {
+func createTrendingBeansHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		beans, err := findBeans(db, "trending", req, bs.DEFAULT_COLUMNS)
@@ -137,7 +137,7 @@ func createTrendingBeansHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createLatestDigestsHandler(db *bs.Beansack) gin.HandlerFunc {
+func createLatestDigestsHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		// pp.Println("req", req)
@@ -150,7 +150,7 @@ func createLatestDigestsHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func createTrendingDigestsHandler(db *bs.Beansack) gin.HandlerFunc {
+func createTrendingDigestsHandler(db *bs.Ducklake) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.MustGet("req").(BeansQueryRequest)
 		// pp.Println("req", req)
@@ -163,7 +163,7 @@ func createTrendingDigestsHandler(db *bs.Beansack) gin.HandlerFunc {
 	}
 }
 
-func findBeans(db *bs.Beansack, trending_or_latest string, req BeansQueryRequest, columns_expr string) ([]bs.Bean, error) {
+func findBeans(db *bs.Ducklake, trending_or_latest string, req BeansQueryRequest, columns_expr string) ([]bs.Bean, error) {
 	var columns []string
 	if columns_expr != "" {
 		columns = []string{columns_expr}

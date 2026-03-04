@@ -23,7 +23,7 @@ type SelectExpr struct {
 	dim     int
 }
 
-func NewSelect(db *Beansack) *SelectExpr {
+func NewSelect(db *Ducklake) *SelectExpr {
 	return &SelectExpr{
 		table:   "",
 		columns: []ExprWithArg{},

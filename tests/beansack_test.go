@@ -15,7 +15,7 @@ import (
 
 var testCtx = context.Background()
 
-func setupTestDB() *bs.Beansack {
+func setupTestDB() *bs.Ducklake {
 	bs.NoError(godotenv.Load("../.env"))
 	catalog := os.Getenv("PG_CONNECTION_STRING")
 	storage := os.Getenv("STORAGE_DATAPATH")
