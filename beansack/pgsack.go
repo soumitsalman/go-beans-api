@@ -134,6 +134,7 @@ func fetchBeans(ctx context.Context, p *PGSack, table string, conditions Conditi
 // SQL query string builder utilities
 // TODO: add function for building query
 func (p *PGSack) buildSQL(table string, conditions Condition, orders []string, page Pagination, columns []string) (string, pgx.NamedArgs) {
+	LogQuery(table, conditions, orders, page, columns)
 	// where clause first - because we may need it before select
 	where_expr, where_params := p.buildSQLWhere(conditions)
 
@@ -160,7 +161,11 @@ func (p *PGSack) buildSQL(table string, conditions Condition, orders []string, p
 		)
 		base_params["embedding"] = pgvector.NewVector(conditions.Embedding)
 		base_params["distance"] = conditions.Distance
-		orders = append([]string{ORDER_BY_DISTANCE}, orders...)
+		if orders == nil {
+			orders = []string{ORDER_BY_DISTANCE}
+		} else {
+			orders = append(orders, ORDER_BY_DISTANCE)
+		}
 	}
 	builder := strings.Builder{}
 	builder.WriteString(base_expr)

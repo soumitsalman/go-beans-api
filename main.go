@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	bs "github.com/soumitsalman/beansapi/beansack"
 	_ "github.com/soumitsalman/beansapi/docs"
 	"github.com/soumitsalman/beansapi/nlp"
@@ -20,7 +20,6 @@ const (
 
 func main() {
 	_ = godotenv.Load()
-	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -45,8 +44,11 @@ func main() {
 
 	port := getEnv("PORT", DEFAULT_PORT, false)
 	addr := "0.0.0.0:" + port
-	log.WithField("addr", addr).Info("Routes Initialized. Server starting...")
-	bs.NoError(api.Run(addr), "server error")
+	log.Info().Str("module", "MAIN").Str("addr", addr).Msg("Routes Initialized. Server starting")
+
+	if err := api.Run(addr); err != nil {
+		log.Fatal().Str("module", "MAIN").Err(err).Msg("server error")
+	}
 }
 
 func getEnv(name, fallback string, must_exist bool) string {
@@ -54,7 +56,7 @@ func getEnv(name, fallback string, must_exist bool) string {
 		return v
 	}
 	if must_exist {
-		log.Fatalf("%s is required\n", name)
+		log.Fatal().Str("module", "MAIN").Msgf("%s is required", name)
 	}
 	return fallback
 }

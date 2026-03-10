@@ -60,10 +60,15 @@ definitions:
         type: string
     type: object
 info:
-  contact: {}
+  contact:
+    email: soumitsrah@cafecito.tech
+    name: Project Cafecito
+    url: http://cafecito.tech
   description: Beans is an intelligent news & blogs aggregation and search service
     that curates fresh content from RSS feeds using AI-powered natural language queries
     and filters.
+  license:
+    name: MIT
   title: Beans API & MCP
   version: "0.1"
 paths:
@@ -77,11 +82,15 @@ paths:
       parameters:
       - description: search query (min length 3, max length 512)
         in: query
+        maxLength: 512
         name: q
         type: string
-      - description: accuracy (0-1) used as cosine similarity threshold; higher values
+      - default: 0.75
+        description: accuracy (0-1) used as cosine similarity threshold; higher values
           return fewer, more similar results
         in: query
+        maximum: 1
+        minimum: 0
         name: acc
         type: number
       - description: kind filter (news, blog, etc.)
@@ -102,17 +111,22 @@ paths:
           type: string
         name: sources
         type: array
-      - description: published since (YYYY-MM-DD)
+      - default: last 7 days
+        description: published since (YYYY-MM-DD)
         format: date
         in: query
         name: published_since
         type: string
-      - description: include content
+      - default: false
+        description: include content
         in: query
         name: with_content
         type: boolean
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset
@@ -150,11 +164,15 @@ paths:
       parameters:
       - description: search query (min length 3, max length 512)
         in: query
+        maxLength: 512
         name: q
         type: string
-      - description: accuracy (0-1) used as cosine similarity threshold; higher values
+      - default: 0.75
+        description: accuracy (0-1) used as cosine similarity threshold; higher values
           return fewer, more similar results
         in: query
+        maximum: 1
+        minimum: 0
         name: acc
         type: number
       - description: kind filter (news, blog, etc.)
@@ -175,17 +193,22 @@ paths:
           type: string
         name: sources
         type: array
-      - description: trending since (YYYY-MM-DD)
+      - default: last 7 days
+        description: trending since (YYYY-MM-DD)
         format: date
         in: query
         name: trending_since
         type: string
-      - description: include content
+      - default: false
+        description: include content
         in: query
         name: with_content
         type: boolean
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset
@@ -240,8 +263,11 @@ paths:
         name: sources
         required: true
         type: array
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset
@@ -273,8 +299,11 @@ paths:
       description: Retrieves a list of unique publisher IDs (paginated) from which
         articles are sourced.
       parameters:
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset
@@ -303,8 +332,11 @@ paths:
         (paginated), for example: Artificial Intelligence, Cybersecurity, Politics,
         Software Engineering, etc.'
       parameters:
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset
@@ -332,8 +364,11 @@ paths:
       description: Retrieves a list of unique named entities (paginated), such as
         people, organizations, and products mentioned in articles.
       parameters:
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset
@@ -361,8 +396,11 @@ paths:
       description: Retrieves a list of unique geographic regions (paginated) mentioned
         in articles, e.g., UK, US, Europe.
       parameters:
-      - description: limit
+      - default: 16
+        description: limit
         in: query
+        maximum: 128
+        minimum: 1
         name: limit
         type: integer
       - description: offset

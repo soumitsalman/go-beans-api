@@ -9,7 +9,14 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "contact": {
+            "name": "Project Cafecito",
+            "url": "http://cafecito.tech",
+            "email": "soumitsrah@cafecito.tech"
+        },
+        "license": {
+            "name": "MIT"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -30,13 +37,17 @@ const docTemplate = `{
                 "summary": "Get latest articles",
                 "parameters": [
                     {
+                        "maxLength": 512,
                         "type": "string",
                         "description": "search query (min length 3, max length 512)",
                         "name": "q",
                         "in": "query"
                     },
                     {
+                        "maximum": 1,
+                        "minimum": 0,
                         "type": "number",
+                        "default": 0.75,
                         "description": "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results",
                         "name": "acc",
                         "in": "query"
@@ -70,18 +81,23 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "format": "date",
+                        "default": "last 7 days",
                         "description": "published since (YYYY-MM-DD)",
                         "name": "published_since",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
+                        "default": false,
                         "description": "include content",
                         "name": "with_content",
                         "in": "query"
                     },
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"
@@ -133,13 +149,17 @@ const docTemplate = `{
                 "summary": "Get trending articles",
                 "parameters": [
                     {
+                        "maxLength": 512,
                         "type": "string",
                         "description": "search query (min length 3, max length 512)",
                         "name": "q",
                         "in": "query"
                     },
                     {
+                        "maximum": 1,
+                        "minimum": 0,
                         "type": "number",
+                        "default": 0.75,
                         "description": "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results",
                         "name": "acc",
                         "in": "query"
@@ -173,18 +193,23 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "format": "date",
+                        "default": "last 7 days",
                         "description": "trending since (YYYY-MM-DD)",
                         "name": "trending_since",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
+                        "default": false,
                         "description": "include content",
                         "name": "with_content",
                         "in": "query"
                     },
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"
@@ -267,7 +292,10 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"
@@ -316,7 +344,10 @@ const docTemplate = `{
                 "summary": "List sources",
                 "parameters": [
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"
@@ -359,7 +390,10 @@ const docTemplate = `{
                 "summary": "List categories",
                 "parameters": [
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"
@@ -402,7 +436,10 @@ const docTemplate = `{
                 "summary": "List entities",
                 "parameters": [
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"
@@ -445,7 +482,10 @@ const docTemplate = `{
                 "summary": "List regions",
                 "parameters": [
                     {
+                        "maximum": 128,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 16,
                         "description": "limit",
                         "name": "limit",
                         "in": "query"

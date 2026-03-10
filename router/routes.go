@@ -1,18 +1,22 @@
-// @title Beans API & MCP
-// @version 0.1
-// @description Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.
-// @schemes https
+// @title 			Beans API & MCP
+// @version 		0.1
+// @description 	Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.
+// @schemes 		https
+// @license.name 	MIT
+// @contact.name 	Project Cafecito
+// @contact.url  	http://cafecito.tech
+// @contact.email 	soumitsrah@cafecito.tech
 package router
 
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	bs "github.com/soumitsalman/beansapi/beansack"
 	"github.com/soumitsalman/beansapi/nlp"
@@ -100,7 +104,7 @@ func validateTagsParams(c *gin.Context) {
 // @Description Retrieves a list of unique values of article categories/topics (paginated), for example: Artificial Intelligence, Cybersecurity, Politics, Software Engineering, etc.
 // @Tags Tags
 // @Produce json
-// @Param limit query int false "limit"
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} string
 // @Failure 500 {string} string "error message"
@@ -116,7 +120,7 @@ func (r *Configuration) getCategories(c *gin.Context) {
 // @Description Retrieves a list of unique named entities (paginated), such as people, organizations, and products mentioned in articles.
 // @Tags Tags
 // @Produce json
-// @Param limit query int false "limit"
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} string
 // @Failure 500 {string} string "error message"
@@ -132,7 +136,7 @@ func (r *Configuration) getEntities(c *gin.Context) {
 // @Description Retrieves a list of unique geographic regions (paginated) mentioned in articles, e.g., UK, US, Europe.
 // @Tags Tags
 // @Produce json
-// @Param limit query int false "limit"
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} string
 // @Failure 500 {string} string "error message"
@@ -160,7 +164,7 @@ func validatePublishersParams(c *gin.Context) {
 // @Description Retrieves a list of unique publisher IDs (paginated) from which articles are sourced.
 // @Tags Publishers
 // @Produce json
-// @Param limit query int false "limit"
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} string
 // @Failure 500 {string} string "error message"
@@ -177,7 +181,7 @@ func (r *Configuration) getSources(c *gin.Context) {
 // @Tags Publishers
 // @Produce json
 // @Param sources query []string true "sources/publisher ids to include" collectionFormat(multi)
-// @Param limit query int false "limit"
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} beansack.Publisher
 // @Failure 400 {string} string "error message"
@@ -208,12 +212,6 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 		Sources: input.Sources,
 		Extra:   []string{bs.PROCESSED_BEANS_CONDITIONS},
 	}
-	if conditions.Created.IsZero() {
-		conditions.Created = time.Now().AddDate(0, 0, -7) // default to last 7 days
-	}
-	if conditions.Updated.IsZero() {
-		conditions.Updated = time.Now().AddDate(0, 0, -7) // default to last 7 days
-	}
 	if input.WithContent {
 		conditions.Extra = append(conditions.Extra, bs.UNRESTRICTED_CONTENT_CONDITIONS)
 	}
@@ -242,14 +240,14 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param q query string false "search query (min length 3, max length 512)"
-// @Param acc query number false "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results"
+// @Param q query string false "search query (min length 3, max length 512)" maxlength(512)
+// @Param acc query number false "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results" default(0.75) minimum(0) maximum(1)
 // @Param kind query string false "kind filter (news, blog, etc.)"
 // @Param tags query []string false "tags (categories, regions, entities) to filter by" collectionFormat(multi)
 // @Param sources query []string false "sources/publisher ids to filter by" collectionFormat(multi)
-// @Param published_since query string false "published since (YYYY-MM-DD)" format(date)
-// @Param with_content query bool false "include content"
-// @Param limit query int false "limit"
+// @Param published_since query string false "published since (YYYY-MM-DD)" format(date) default(last 7 days)
+// @Param with_content query bool false "include content" default(false)
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} beansack.Bean
 // @Failure 400 {string} string "error message"
@@ -259,7 +257,9 @@ func (r *Configuration) getLatestArticles(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
 	page := c.MustGet("req_page").(bs.Pagination)
 	columns := c.MustGet("req_columns").([]string)
-	conditions.Updated = time.Time{} // ignore trending filter for latest endpoint
+	if conditions.Created.IsZero() {
+		conditions.Created = time.Now().AddDate(0, 0, -7) // default to last 7 days if no published filter provided
+	}
 	items, err := r.DB.QueryLatestBeans(c.Request.Context(), conditions, page, columns)
 	returnResponse(c, items, err)
 }
@@ -270,14 +270,14 @@ func (r *Configuration) getLatestArticles(c *gin.Context) {
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param q query string false "search query (min length 3, max length 512)"
-// @Param acc query number false "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results"
+// @Param q query string false "search query (min length 3, max length 512)" maxlength(512)
+// @Param acc query number false "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results" default(0.75) minimum(0) maximum(1)
 // @Param kind query string false "kind filter (news, blog, etc.)"
 // @Param tags query []string false "tags (categories, regions, entities) to filter by" collectionFormat(multi)
 // @Param sources query []string false "sources/publisher ids to filter by" collectionFormat(multi)
-// @Param trending_since query string false "trending since (YYYY-MM-DD)" format(date)
-// @Param with_content query bool false "include content"
-// @Param limit query int false "limit"
+// @Param trending_since query string false "trending since (YYYY-MM-DD)" format(date) default(last 7 days)
+// @Param with_content query bool false "include content" default(false)
+// @Param limit query int false "limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "offset"
 // @Success 200 {array} beansack.Bean
 // @Failure 400 {string} string "error message"
@@ -287,8 +287,10 @@ func (r *Configuration) getTrendingArticles(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
 	page := c.MustGet("req_page").(bs.Pagination)
 	columns := c.MustGet("req_columns").([]string)
-	conditions.Created = time.Time{} // ignore published filter for trending endpoint
-	items, err := r.DB.QueryTrendingBeans(c.Request.Context(), conditions, page, columns)
+	if conditions.Updated.IsZero() {
+		conditions.Updated = time.Now().AddDate(0, 0, -7) // default to last 7 days if no trending filter provided
+	}
+	items, err := r.DB.QueryTrendingBeans(c.Request.Context(), conditions, page, append(columns, bs.K_TRENDSCORE))
 	returnResponse(c, items, err)
 }
 
@@ -305,7 +307,7 @@ func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string
 
 	router := gin.New()
 	// JSON access logs and recovery using zerolog
-	router.Use(createRequestLogger(), gin.Recovery())
+	router.Use(requestLogger, gin.Recovery())
 
 	// Swagger / OpenAPI endpoints
 	// NOTE: run `swag init` to generate docs (package `docs`) before using the UI.
@@ -362,34 +364,30 @@ func (r *Configuration) concurrencyMiddleware(c *gin.Context) {
 }
 
 // requestLogger logs request path, query parameters, status and latency in JSON via zerolog
-func createRequestLogger() gin.HandlerFunc {
-	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
+func requestLogger(c *gin.Context) {
+	start := time.Now()
+	c.Next()
 
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
+	status := c.Writer.Status()
 
-		status := c.Writer.Status()
-
-		var evt *zerolog.Event
-		if len(c.Errors) > 0 || status >= 500 {
-			evt = log.Error()
-		} else if status >= 400 {
-			evt = log.Warn()
-		} else {
-			evt = log.Info()
-		}
-		evt.Str("method", c.Request.Method).
-			Str("path", c.Request.URL.Path).
-			Interface("query", c.Request.URL.Query()).
-			Int("status", status).
-			Dur("latency", time.Since(start))
-
-		if len(c.Errors) > 0 {
-			evt.Str("error", c.Errors.String())
-		}
-		evt.Msg("router")
+	var evt *zerolog.Event
+	if len(c.Errors) > 0 || status >= 500 {
+		evt = log.Error()
+	} else if status >= 400 {
+		evt = log.Warn()
+	} else {
+		evt = log.Info()
 	}
+	evt.Str("module", "ROUTER").Str("method", c.Request.Method).
+		Str("path", c.Request.URL.Path).
+		Interface("query", c.Request.URL.Query()).
+		Int("status", status).
+		Dur("latency", time.Since(start))
+
+	if len(c.Errors) > 0 {
+		evt.Str("error", c.Errors.String())
+	}
+	evt.Msg("incoming")
 }
 
 func returnResponse[T any](c *gin.Context, items []T, err error) {

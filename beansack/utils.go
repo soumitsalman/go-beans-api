@@ -7,28 +7,39 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
-
-// TODO: add db logging
 
 // Logging and error handling utilities
 func NoError(err error, args ...any) {
 	if err != nil {
-		log.WithError(err).Fatal(args...)
+		log.Fatal().Str("module", "DB").Err(err).Msg(fmt.Sprint(args...))
 	}
 }
 
 func LogError(err error, msg string, args ...any) {
 	if err != nil {
-		log.WithError(err).Errorf(msg, args...)
+		log.Error().Str("module", "DB").Err(err).Msgf(msg, args...)
 	}
 }
 
 func LogWarning(err error, msg string, args ...any) {
 	if err != nil {
-		log.WithError(err).Warningf(msg, args...)
+		log.Warn().Str("module", "DB").Err(err).Msgf(msg, args...)
 	}
+}
+
+func LogQuery(table string, conditions Condition, orders []string, page Pagination, columns []string) {
+	if len(conditions.Embedding) > 0 {
+		conditions.Embedding = conditions.Embedding[:1] // Avoid logging large embedding data
+	}
+	log.Debug().Str("module", "DB").
+		Str("table", table).
+		Interface("conditions", conditions).
+		Strs("orders", orders).
+		Interface("pagination", page).
+		Strs("columns", columns).
+		Msg("Query")
 }
 
 // SQL to Go type conversions for nullable fields and custom types
