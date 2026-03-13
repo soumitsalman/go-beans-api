@@ -1,12 +1,11 @@
 package beansack
 
 import (
-	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,33 +28,57 @@ func LogWarning(err error, msg string, args ...any) {
 	}
 }
 
-func LogQuery(table string, conditions Condition, orders []string, page Pagination, columns []string) {
-	if len(conditions.Embedding) > 0 {
-		conditions.Embedding = conditions.Embedding[:1] // Avoid logging large embedding data
+func LogQueryResult(items any, err error) {
+	if err != nil {
+		log.Error().Str("module", "DB").Err(err).Msg("query failed")
+	} else {
+		log.Debug().Str("module", "DB").Interface("result", items).Msg("query succeeded")
 	}
-	log.Debug().Str("module", "DB").
-		Str("table", table).
-		Interface("conditions", conditions).
-		Strs("orders", orders).
-		Interface("pagination", page).
-		Strs("columns", columns).
-		Msg("Query")
+}
+
+func LogQuery(query string, args pgx.NamedArgs) {
+	evt := log.Debug().Str("module", "DB").Str("sql", query)
+	for key, value := range args {
+		if key != "embedding" {
+			evt = evt.Interface(key, value)
+		} else {
+			evt = evt.Str("embedding", "[REDACTED]") // Avoid logging large embeddings
+		}
+	}
+	evt.Msg("query")
+}
+
+func ConcatArray[T any](arrays ...[]T) []T {
+	var result []T
+	for _, array := range arrays {
+		if array != nil {
+			result = append(result, array...)
+		}
+	}
+	return result
 }
 
 // SQL to Go type conversions for nullable fields and custom types
-func nullStringToString(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
-}
+// func nullStringToString(ns sql.NullString) string {
+// 	if ns.Valid {
+// 		return ns.String
+// 	}
+// 	return ""
+// }
 
-func nullTimeToTime(nt sql.NullTime) time.Time {
-	if nt.Valid {
-		return nt.Time
-	}
-	return time.Time{}
-}
+// func nullTimeToTime(nt sql.NullTime) time.Time {
+// 	if nt.Valid {
+// 		return nt.Time
+// 	}
+// 	return time.Time{}
+// }
+
+// func nullBigIntToInt64(ni sql.NullInt64) int64 {
+// 	if ni.Valid {
+// 		return ni.Int64
+// 	}
+// 	return 0
+// }
 
 // SQL marshalling and unmarshalling for vector and string array types
 type sqlVector []float32

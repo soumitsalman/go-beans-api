@@ -22,7 +22,8 @@ const (
 )
 
 const (
-	_TRENDING_BEANS_VIEW = "trending_beans_view"
+	_TRENDING_BEANS_VIEW   = "trending_beans_view"
+	_AGGREGATED_BEANS_VIEW = "aggregated_beans_view"
 )
 
 type PGSack struct {
@@ -54,12 +55,20 @@ func NewPGSack(ctx context.Context, connString string) *PGSack {
 	return &PGSack{db: db}
 }
 
-func (p *PGSack) QueryLatestBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Bean, error) {
+func (p *PGSack) QueryBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error) {
+	items, err := fetchBeans(ctx, p, _AGGREGATED_BEANS_VIEW, conditions, nil, page, columns)
+	if err != nil {
+		return nil, err
+	}
+	return datautils.Transform(items, func(item *dataRow) BeanAggregate { return item.toBeanAggregate() }), nil
+}
+
+func (p *PGSack) QueryLatestBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error) {
 	items, err := fetchBeans(ctx, p, BEANS, conditions, []string{ORDER_BY_LATEST}, page, columns)
 	if err != nil {
 		return nil, err
 	}
-	return datautils.Transform(items, func(item *dataRow) Bean { return item.toBean() }), nil
+	return datautils.Transform(items, func(item *dataRow) BeanAggregate { return item.toBeanAggregate() }), nil
 }
 
 func (p *PGSack) QueryTrendingBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error) {
@@ -128,13 +137,14 @@ func (p *PGSack) Close() {
 
 func fetchBeans(ctx context.Context, p *PGSack, table string, conditions Condition, orders []string, page Pagination, columns []string) ([]dataRow, error) {
 	query, args := p.buildSQL(table, conditions, orders, page, columns)
-	return fetchAll[dataRow](ctx, p.db, query, args)
+	beans, err := fetchAll[dataRow](ctx, p.db, query, args)
+	// logQueryResult(beans, err)
+	return beans, err
 }
 
 // SQL query string builder utilities
 // TODO: add function for building query
 func (p *PGSack) buildSQL(table string, conditions Condition, orders []string, page Pagination, columns []string) (string, pgx.NamedArgs) {
-	LogQuery(table, conditions, orders, page, columns)
 	// where clause first - because we may need it before select
 	where_expr, where_params := p.buildSQLWhere(conditions)
 
@@ -151,7 +161,7 @@ func (p *PGSack) buildSQL(table string, conditions Condition, orders []string, p
 		base_expr = fmt.Sprintf(`
 			WITH vector_distances AS (
                 SELECT *, (embedding <=> @embedding::vector) AS distance
-                FROM %s 
+                FROM %s
 				%s
             )
             SELECT %s
@@ -181,8 +191,9 @@ func (p *PGSack) buildSQL(table string, conditions Condition, orders []string, p
 		builder.WriteString(" ")
 		builder.WriteString(page_expr)
 	}
-	return builder.String(), mergeParams(base_params, where_params, page_params)
-	// return expr, params
+	query, args := builder.String(), mergeParams(base_params, where_params, page_params)
+	LogQuery(query, args)
+	return query, args
 }
 
 func mergeParams(maps ...pgx.NamedArgs) pgx.NamedArgs {
@@ -201,9 +212,9 @@ func (p *PGSack) buildSQLWhere(conditions Condition) (string, pgx.NamedArgs) {
 	parts := make([]string, 0, 10) // preallocate for expected conditions
 	args := pgx.NamedArgs{}
 
-	if len(conditions.Urls) > 0 {
+	if len(conditions.URLs) > 0 {
 		parts = append(parts, "url = ANY(@urls)")
-		args["urls"] = conditions.Urls // pgx handles []string as array automatically
+		args["urls"] = conditions.URLs // pgx handles []string as array automatically
 	}
 
 	if conditions.Kind != "" {
@@ -288,8 +299,8 @@ func (p *PGSack) buildPGLimitOffset(page Pagination) (string, pgx.NamedArgs) {
 }
 
 // PGX fetch helpers
-func fetchOne[T any](ctx context.Context, db *pgxpool.Pool, query string, args ...any) (T, error) {
-	rows, err := db.Query(ctx, query, args...)
+func fetchOne[T any](ctx context.Context, db *pgxpool.Pool, query string, args pgx.NamedArgs) (T, error) {
+	rows, err := db.Query(ctx, query, args)
 	if err != nil {
 		var zero T
 		return zero, err
@@ -298,8 +309,8 @@ func fetchOne[T any](ctx context.Context, db *pgxpool.Pool, query string, args .
 	return pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[T])
 }
 
-func fetchOneScalar[T any](ctx context.Context, db *pgxpool.Pool, query string, args ...any) (T, error) {
-	rows, err := db.Query(ctx, query, args...)
+func fetchOneScalar[T any](ctx context.Context, db *pgxpool.Pool, query string, args pgx.NamedArgs) (T, error) {
+	rows, err := db.Query(ctx, query, args)
 	if err != nil {
 		var zero T
 		return zero, err
@@ -308,8 +319,8 @@ func fetchOneScalar[T any](ctx context.Context, db *pgxpool.Pool, query string, 
 	return pgx.CollectOneRow(rows, pgx.RowTo[T])
 }
 
-func fetchAll[T any](ctx context.Context, db *pgxpool.Pool, query string, args ...any) ([]T, error) {
-	rows, err := db.Query(ctx, query, args...)
+func fetchAll[T any](ctx context.Context, db *pgxpool.Pool, query string, args pgx.NamedArgs) ([]T, error) {
+	rows, err := db.Query(ctx, query, args)
 	if err != nil {
 		return nil, err
 	}
@@ -317,8 +328,8 @@ func fetchAll[T any](ctx context.Context, db *pgxpool.Pool, query string, args .
 	return pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 }
 
-func fetchAllScalar[T any](ctx context.Context, db *pgxpool.Pool, query string, args ...any) ([]T, error) {
-	rows, err := db.Query(ctx, query, args...)
+func fetchAllScalar[T any](ctx context.Context, db *pgxpool.Pool, query string, args pgx.NamedArgs) ([]T, error) {
+	rows, err := db.Query(ctx, query, args)
 	if err != nil {
 		return nil, err
 	}
@@ -346,12 +357,12 @@ type dataRow struct {
 	Entities    []string        `db:"entities"`
 	Related     []string        `db:"related"`
 	ClusterId   sql.NullString  `db:"cluster_id"`
-	ClusterSize int             `db:"cluster_size"`
+	ClusterSize sql.NullInt64   `db:"cluster_size"`
 	Updated     sql.NullTime    `db:"updated"`
-	Likes       int             `db:"likes"`
-	Comments    int             `db:"comments"`
-	Subscribers int             `db:"subscribers"`
-	Shares      int             `db:"shares"`
+	Likes       sql.NullInt64   `db:"likes"`
+	Comments    sql.NullInt64   `db:"comments"`
+	Subscribers sql.NullInt64   `db:"subscribers"`
+	Shares      sql.NullInt64   `db:"shares"`
 	Distance    float64         `db:"distance"`
 	TrendScore  float64         `db:"trend_score"`
 	ChatterURL  sql.NullString  `db:"chatter_url"`
@@ -367,17 +378,17 @@ type dataRow struct {
 // Conversion methods from dataRow to public types
 func (r *dataRow) toBean() Bean {
 	return Bean{
-		URL:        nullStringToString(r.URL),
-		Kind:       nullStringToString(r.Kind),
-		Title:      nullStringToString(r.Title),
-		Summary:    nullStringToString(r.Summary),
-		Content:    nullStringToString(r.Content),
-		Author:     nullStringToString(r.Author),
-		Source:     nullStringToString(r.Source),
-		ImageUrl:   nullStringToString(r.ImageUrl),
-		Created:    nullTimeToTime(r.Created),
+		URL:        r.URL.String,
+		Kind:       r.Kind.String,
+		Title:      r.Title.String,
+		Summary:    r.Summary.String,
+		Content:    r.Content.String,
+		Author:     r.Author.String,
+		Source:     r.Source.String,
+		ImageUrl:   r.ImageUrl.String,
+		Created:    r.Created.Time,
 		Embedding:  r.Embedding.Slice(),
-		Gist:       nullStringToString(r.Gist),
+		Gist:       r.Gist.String,
 		Categories: r.Categories,
 		Sentiments: r.Sentiments,
 		Regions:    r.Regions,
@@ -386,54 +397,58 @@ func (r *dataRow) toBean() Bean {
 }
 
 func (r *dataRow) toBeanAggregate() BeanAggregate {
-	bean := r.toBean()
 	return BeanAggregate{
-		Bean:        bean,
+		Bean:        r.toBean(),
+		BaseURL:     r.BaseURL.String,
+		SiteName:    r.SiteName.String,
+		Description: r.Description.String,
+		Favicon:     r.Favicon.String,
+		Likes:       r.Likes.Int64,
+		Comments:    r.Comments.Int64,
+		Subscribers: r.Subscribers.Int64,
+		Shares:      r.Shares.Int64,
 		Related:     r.Related,
-		ClusterId:   nullStringToString(r.ClusterId),
-		ClusterSize: r.ClusterSize,
-		Updated:     nullTimeToTime(r.Updated),
-		Likes:       r.Likes,
-		Comments:    r.Comments,
-		Subscribers: r.Subscribers,
-		Shares:      r.Shares,
+		ClusterId:   r.ClusterId.String,
+		ClusterSize: r.ClusterSize.Int64,
+		Updated:     r.Updated.Time,
 		Distance:    r.Distance,
 		TrendScore:  r.TrendScore,
+		MergedTags:  ConcatArray[string](r.Categories, r.Regions, r.Entities),
 	}
 }
 
 func (r *dataRow) toPublisher() Publisher {
 	return Publisher{
-		Source:      nullStringToString(r.Source),
-		BaseURL:     nullStringToString(r.BaseURL),
-		SiteName:    nullStringToString(r.SiteName),
-		Description: nullStringToString(r.Description),
-		Favicon:     nullStringToString(r.Favicon),
-		RSSFeed:     nullStringToString(r.RSSFeed),
-		Collected:   nullTimeToTime(r.Collected),
+		Source:      r.Source.String,
+		BaseURL:     r.BaseURL.String,
+		SiteName:    r.SiteName.String,
+		Description: r.Description.String,
+		Favicon:     r.Favicon.String,
+		RSSFeed:     r.RSSFeed.String,
+		Collected:   r.Collected.Time,
 	}
 }
 
 func (r *dataRow) toChatter() Chatter {
 	return Chatter{
-		ChatterURL:  nullStringToString(r.ChatterURL),
-		URL:         nullStringToString(r.URL),
-		Source:      nullStringToString(r.Source),
-		Forum:       nullStringToString(r.Forum),
-		Collected:   nullTimeToTime(r.Collected),
-		Likes:       r.Likes,
-		Comments:    r.Comments,
-		Subscribers: r.Subscribers,
+		ChatterURL:  r.ChatterURL.String,
+		URL:         r.URL.String,
+		Source:      r.Source.String,
+		Forum:       r.Forum.String,
+		Collected:   r.Collected.Time,
+		Likes:       r.Likes.Int64,
+		Comments:    r.Comments.Int64,
+		Subscribers: r.Subscribers.Int64,
 	}
 }
 
-func (r *dataRow) toBeanChatter() BeanChatter {
-	return BeanChatter{
-		URL:         nullStringToString(r.URL),
-		Collected:   nullTimeToTime(r.Collected),
-		Likes:       r.Likes,
-		Comments:    r.Comments,
-		Subscribers: r.Subscribers,
-		Shares:      r.Shares,
+func (r *dataRow) toChatterAggregate() ChatterAggregate {
+	return ChatterAggregate{
+		URL:         r.URL.String,
+		Collected:   r.Collected.Time,
+		Likes:       r.Likes.Int64,
+		Comments:    r.Comments.Int64,
+		Subscribers: r.Subscribers.Int64,
+		Shares:      r.Shares.Int64,
 	}
 }

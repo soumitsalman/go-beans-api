@@ -57,7 +57,7 @@ func TestQueryChatterStats(t *testing.T) {
 		"https://llmapitest.com/",
 		"https://htmlrev.com/",
 	}
-	cond := bs.Condition{Urls: urls}
+	cond := bs.Condition{URLs: urls}
 	page := bs.Pagination{Limit: 5}
 	chatters, err := db.QueryChatters(context.Background(), cond, page, nil)
 	assert.NoError(t, err)
@@ -79,7 +79,7 @@ func TestQueryBeanExtensions(t *testing.T) {
 		"https://htmlrev.com/",
 	}
 	// use the new query API to fetch beans matching the URLs
-	cond := bs.Condition{Urls: urls}
+	cond := bs.Condition{URLs: urls}
 	page := bs.Pagination{Limit: 5}
 	beans, err := db.QueryLatestBeans(context.Background(), cond, page, nil)
 	assert.NoError(t, err)

@@ -24,7 +24,7 @@ const docTemplate = `{
     "paths": {
         "/articles/latest": {
             "get": {
-                "description": "Searches for the latest articles/news/blogs. For vector search (when ` + "`" + `q` + "`" + ` is provided), results are sorted by relevance; otherwise results are sorted by publication date (newest first).",
+                "description": "Retrieves the most recently published articles, sorted by publish date (newest first).",
                 "consumes": [
                     "application/json"
                 ],
@@ -34,12 +34,11 @@ const docTemplate = `{
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Get latest articles",
+                "summary": "Get latest articles (reverse chronological)",
                 "parameters": [
                     {
-                        "maxLength": 512,
                         "type": "string",
-                        "description": "search query (min length 3, max length 512)",
+                        "description": "optional semantic search query (character length 3-512)",
                         "name": "q",
                         "in": "query"
                     },
@@ -48,13 +47,13 @@ const docTemplate = `{
                         "minimum": 0,
                         "type": "number",
                         "default": 0.75,
-                        "description": "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results",
+                        "description": "embedding accuracy/similarity threshold (0.0-1.0)",
                         "name": "acc",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "kind filter (news, blog, etc.)",
+                        "description": "content type filter (news, blog, post, etc.)",
                         "name": "kind",
                         "in": "query"
                     },
@@ -63,8 +62,8 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "multi",
-                        "description": "tags (categories, regions, entities) to filter by",
+                        "collectionFormat": "csv",
+                        "description": "case/whitespace-insensitive text search across categories, regions, entities (recommended)",
                         "name": "tags",
                         "in": "query"
                     },
@@ -73,24 +72,53 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "multi",
-                        "description": "sources/publisher ids to filter by",
+                        "collectionFormat": "csv",
+                        "description": "precise category filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "categories",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise region filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "regions",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "entities",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "publisher source filters (inclusive OR)",
                         "name": "sources",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "format": "date",
-                        "default": "last 7 days",
-                        "description": "published since (YYYY-MM-DD)",
-                        "name": "published_since",
+                        "description": "published since date (YYYY-MM-DD, defaults to 7 days ago if omitted)",
+                        "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "default": false,
-                        "description": "include content",
-                        "name": "with_content",
+                        "description": "include full article content",
+                        "name": "full_content",
                         "in": "query"
                     },
                     {
@@ -98,37 +126,365 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "array of latest articles sorted by publish date",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/beansack.Bean"
+                                "$ref": "#/definitions/beansack.BeanAggregate"
                             }
                         }
                     },
                     "400": {
-                        "description": "error message",
+                        "description": "bad request: invalid parameters",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
-                        "description": "error message",
+                        "description": "database or embedder error",
                         "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/search": {
+            "get": {
+                "description": "Perform semantic (vector embedding) or tag-based search across all articles in the database.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Articles"
+                ],
+                "summary": "Semantic/tag-based article search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "semantic vector search query (character length 3-512, natural language)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number",
+                        "default": 0.75,
+                        "description": "embedding accuracy/similarity threshold (0.0-1.0, higher = stricter match)",
+                        "name": "acc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "content type filter (news, blog, post, generated, comment, etc.)",
+                        "name": "content_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
                             "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "specific article URLs to fetch directly (CSV)",
+                        "name": "urls",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "case/whitespace-insensitive text search across categories, regions, entities (AND combination, recommended)",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise category topic filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "categories",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise geographic region filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "regions",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise named entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "entities",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "publisher/source ID filters (inclusive OR)",
+                        "name": "sources",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "published/updated since date (ISO 8601 date format YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "if true, include full article content (large payload)",
+                        "name": "full_content",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 128,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 16,
+                        "description": "page limit (items per page)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "pagination offset (number of items to skip)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "array of article aggregates with engagement metrics",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/beansack.BeanAggregate"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "bad request: missing required search parameters or invalid input",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "database or embedder error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/top-headlines": {
+            "get": {
+                "description": "Retrieves top trending headlines from the past 24 hours, ranked by trend score.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Articles"
+                ],
+                "summary": "Get top headlines (last 24 hours)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "optional semantic search query (character length 3-512)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number",
+                        "default": 0.75,
+                        "description": "embedding accuracy/similarity threshold (0.0-1.0)",
+                        "name": "acc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "content type filter (news, blog, post, etc.)",
+                        "name": "kind",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "case/whitespace-insensitive text search across categories, regions, entities (recommended)",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise category filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "categories",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise region filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "regions",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "entities",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "publisher source filters (inclusive OR)",
+                        "name": "sources",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "include full article content",
+                        "name": "full_content",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 128,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 16,
+                        "description": "page limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "array of top headlines from last 24h, sorted by trend_score",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/beansack.BeanAggregate"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "bad request: invalid parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "database or embedder error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -136,7 +492,7 @@ const docTemplate = `{
         },
         "/articles/trending": {
             "get": {
-                "description": "Searches for trending articles/news/blogs. For vector search (when ` + "`" + `q` + "`" + ` is provided), results are sorted by relevance; otherwise they are sorted by an internal trend score computed from social engagement metrics (comments, likes, shares, last engagement, etc.).",
+                "description": "Retrieves trending articles ranked by trend score. Trend score is computed from:",
                 "consumes": [
                     "application/json"
                 ],
@@ -149,9 +505,8 @@ const docTemplate = `{
                 "summary": "Get trending articles",
                 "parameters": [
                     {
-                        "maxLength": 512,
                         "type": "string",
-                        "description": "search query (min length 3, max length 512)",
+                        "description": "optional semantic search query (character length 3-512)",
                         "name": "q",
                         "in": "query"
                     },
@@ -160,13 +515,13 @@ const docTemplate = `{
                         "minimum": 0,
                         "type": "number",
                         "default": 0.75,
-                        "description": "accuracy (0-1) used as cosine similarity threshold; higher values return fewer, more similar results",
+                        "description": "embedding accuracy/similarity threshold (0.0-1.0, higher = stricter)",
                         "name": "acc",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "kind filter (news, blog, etc.)",
+                        "description": "content type filter (news, blog, post, etc.)",
                         "name": "kind",
                         "in": "query"
                     },
@@ -175,8 +530,8 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "multi",
-                        "description": "tags (categories, regions, entities) to filter by",
+                        "collectionFormat": "csv",
+                        "description": "case/whitespace-insensitive text search across categories, regions, entities (recommended)",
                         "name": "tags",
                         "in": "query"
                     },
@@ -185,24 +540,53 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "multi",
-                        "description": "sources/publisher ids to filter by",
+                        "collectionFormat": "csv",
+                        "description": "precise category filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "categories",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise region filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "regions",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "precise entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "name": "entities",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "publisher source filters (inclusive OR)",
                         "name": "sources",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "format": "date",
-                        "default": "last 7 days",
-                        "description": "trending since (YYYY-MM-DD)",
-                        "name": "trending_since",
+                        "description": "trending since date (YYYY-MM-DD, defaults to 7 days ago)",
+                        "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "default": false,
-                        "description": "include content",
-                        "name": "with_content",
+                        "description": "include full article content",
+                        "name": "full_content",
                         "in": "query"
                     },
                     {
@@ -210,37 +594,52 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "array of trending articles sorted by trend_score (descending)",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/beansack.Bean"
+                                "$ref": "#/definitions/beansack.BeanAggregate"
                             }
                         }
                     },
                     "400": {
-                        "description": "error message",
+                        "description": "bad request: invalid parameters",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
-                        "description": "error message",
+                        "description": "database or embedder error",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -271,22 +670,22 @@ const docTemplate = `{
         },
         "/publishers": {
             "get": {
-                "description": "Retrieves publisher metadata filtered by one or more publisher IDs.",
+                "description": "Retrieves detailed metadata for one or more sources including site name, description, favicon, and RSS feed info.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Publishers"
                 ],
-                "summary": "Query publishers",
+                "summary": "Query source metadata",
                 "parameters": [
                     {
                         "type": "array",
                         "items": {
                             "type": "string"
                         },
-                        "collectionFormat": "multi",
-                        "description": "sources/publisher ids to include",
+                        "collectionFormat": "csv",
+                        "description": "source IDs to fetch metadata for (required, comma-separated CSV)",
                         "name": "sources",
                         "in": "query",
                         "required": true
@@ -296,20 +695,20 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit (items per page)",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset (number of items to skip)",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "array of publisher metadata objects",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -318,15 +717,30 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "error message",
+                        "description": "bad request: missing or invalid sources parameter",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
-                        "description": "error message",
+                        "description": "database error",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -334,34 +748,34 @@ const docTemplate = `{
         },
         "/publishers/sources": {
             "get": {
-                "description": "Retrieves a list of unique publisher IDs (paginated) from which articles are sourced.",
+                "description": "Retrieves a paginated list of unique publisher source IDs and identifiers.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Publishers"
                 ],
-                "summary": "List sources",
+                "summary": "List available sources",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit (items per page)",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset (number of items to skip)",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "list of source/publisher ID strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -369,10 +783,22 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "500": {
-                        "description": "error message",
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "database error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -380,34 +806,34 @@ const docTemplate = `{
         },
         "/tags/categories": {
             "get": {
-                "description": "Retrieves a list of unique values of article categories/topics (paginated), for example: Artificial Intelligence, Cybersecurity, Politics, Software Engineering, etc.",
+                "description": "Retrieves a paginated list of unique article categories/topics discovered in the database.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Tags"
                 ],
-                "summary": "List categories",
+                "summary": "List article categories",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit (items per page)",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset (number of items to skip)",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "list of category strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -415,10 +841,22 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "500": {
-                        "description": "error message",
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "database error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -426,34 +864,34 @@ const docTemplate = `{
         },
         "/tags/entities": {
             "get": {
-                "description": "Retrieves a list of unique named entities (paginated), such as people, organizations, and products mentioned in articles.",
+                "description": "Retrieves a paginated list of unique named entities (persons, organizations, products, places) extracted from articles.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Tags"
                 ],
-                "summary": "List entities",
+                "summary": "List named entities",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit (items per page)",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset (number of items to skip)",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "list of entity strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -461,10 +899,22 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "500": {
-                        "description": "error message",
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "database error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -472,34 +922,34 @@ const docTemplate = `{
         },
         "/tags/regions": {
             "get": {
-                "description": "Retrieves a list of unique geographic regions (paginated) mentioned in articles, e.g., UK, US, Europe.",
+                "description": "Retrieves a paginated list of unique geographic regions mentioned in articles.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Tags"
                 ],
-                "summary": "List regions",
+                "summary": "List geographic regions",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "limit",
+                        "description": "page limit (items per page)",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "offset",
+                        "description": "pagination offset (number of items to skip)",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "list of region strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -507,10 +957,22 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "500": {
-                        "description": "error message",
+                    "401": {
+                        "description": "unauthorized: missing or invalid API key",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "database error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -518,8 +980,8 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "beansack.Bean": {
-            "description": "Bean is the primary content model returned by article endpoints. Each Bean represents a news or blog article and includes metadata such as the ` + "`" + `url` + "`" + `, ` + "`" + `kind` + "`" + `, ` + "`" + `source` + "`" + `, ` + "`" + `title` + "`" + `, ` + "`" + `summary` + "`" + ` and optional full ` + "`" + `content` + "`" + `, ` + "`" + `author` + "`" + `, publish ` + "`" + `created` + "`" + ` date, and derived LLM fields (embedding vectors, ` + "`" + `gist` + "`" + ` highlights, ` + "`" + `entities` + "`" + `, ` + "`" + `regions` + "`" + `, ` + "`" + `categories` + "`" + `, and ` + "`" + `sentiments` + "`" + `).",
+        "beansack.BeanAggregate": {
+            "description": "BeanAggregate composes a ` + "`" + `Bean` + "`" + ` with the publisher's display fields",
             "type": "object",
             "properties": {
                 "author": {
@@ -531,12 +993,17 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "cluster_id": {
+                    "type": "string"
+                },
+                "comments": {
+                    "type": "integer"
+                },
                 "content": {
                     "type": "string"
                 },
-                "created": {
-                    "type": "string",
-                    "format": "date-time"
+                "content_type": {
+                    "type": "string"
                 },
                 "entities": {
                     "type": "array",
@@ -547,10 +1014,24 @@ const docTemplate = `{
                 "image_url": {
                     "type": "string"
                 },
-                "kind": {
-                    "type": "string"
+                "likes": {
+                    "description": "Aggregated social metrics",
+                    "type": "integer"
+                },
+                "num_related": {
+                    "type": "integer"
+                },
+                "publish_date": {
+                    "type": "string",
+                    "format": "date-time"
                 },
                 "regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "related": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -562,14 +1043,43 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "shares": {
+                    "type": "integer"
+                },
                 "source": {
                     "type": "string"
+                },
+                "source_base_url": {
+                    "description": "Publisher display fields",
+                    "type": "string"
+                },
+                "source_description": {
+                    "type": "string"
+                },
+                "source_favicon": {
+                    "type": "string"
+                },
+                "source_site_name": {
+                    "type": "string"
+                },
+                "subscribers": {
+                    "type": "integer"
                 },
                 "summary": {
                     "type": "string"
                 },
+                "tags": {
+                    "description": "Computed tags merged from categories/regions/entities for display",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "title": {
                     "type": "string"
+                },
+                "trend_score": {
+                    "type": "number"
                 },
                 "url": {
                     "type": "string"
@@ -577,22 +1087,22 @@ const docTemplate = `{
             }
         },
         "beansack.Publisher": {
-            "description": "Publisher contains identifying and descriptive information about a publisher or content source: canonical ` + "`" + `source` + "`" + ` id, ` + "`" + `base_url` + "`" + `, optional ` + "`" + `site_name` + "`" + `, human-friendly ` + "`" + `description` + "`" + `, ` + "`" + `favicon` + "`" + ` URL, and optional ` + "`" + `rss_feed` + "`" + `. This model is used by publisher endpoints to return metadata for rendering or filtering.",
+            "description": "Publisher contains identifying and descriptive information about a publisher",
             "type": "object",
             "properties": {
-                "base_url": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "favicon": {
-                    "type": "string"
-                },
-                "site_name": {
-                    "type": "string"
-                },
                 "source": {
+                    "type": "string"
+                },
+                "source_base_url": {
+                    "type": "string"
+                },
+                "source_description": {
+                    "type": "string"
+                },
+                "source_favicon": {
+                    "type": "string"
+                },
+                "source_site_name": {
                     "type": "string"
                 }
             }

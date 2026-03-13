@@ -1,10 +1,6 @@
 definitions:
-  beansack.Bean:
-    description: Bean is the primary content model returned by article endpoints.
-      Each Bean represents a news or blog article and includes metadata such as the
-      `url`, `kind`, `source`, `title`, `summary` and optional full `content`, `author`,
-      publish `created` date, and derived LLM fields (embedding vectors, `gist` highlights,
-      `entities`, `regions`, `categories`, and `sentiments`).
+  beansack.BeanAggregate:
+    description: BeanAggregate composes a `Bean` with the publisher's display fields
     properties:
       author:
         type: string
@@ -12,10 +8,13 @@ definitions:
         items:
           type: string
         type: array
+      cluster_id:
+        type: string
+      comments:
+        type: integer
       content:
         type: string
-      created:
-        format: date-time
+      content_type:
         type: string
       entities:
         items:
@@ -23,9 +22,19 @@ definitions:
         type: array
       image_url:
         type: string
-      kind:
+      likes:
+        description: Aggregated social metrics
+        type: integer
+      num_related:
+        type: integer
+      publish_date:
+        format: date-time
         type: string
       regions:
+        items:
+          type: string
+        type: array
+      related:
         items:
           type: string
         type: array
@@ -33,30 +42,48 @@ definitions:
         items:
           type: string
         type: array
+      shares:
+        type: integer
       source:
         type: string
+      source_base_url:
+        description: Publisher display fields
+        type: string
+      source_description:
+        type: string
+      source_favicon:
+        type: string
+      source_site_name:
+        type: string
+      subscribers:
+        type: integer
       summary:
         type: string
+      tags:
+        description: Computed tags merged from categories/regions/entities for display
+        items:
+          type: string
+        type: array
       title:
         type: string
+      trend_score:
+        type: number
       url:
         type: string
     type: object
   beansack.Publisher:
-    description: 'Publisher contains identifying and descriptive information about
-      a publisher or content source: canonical `source` id, `base_url`, optional `site_name`,
-      human-friendly `description`, `favicon` URL, and optional `rss_feed`. This model
-      is used by publisher endpoints to return metadata for rendering or filtering.'
+    description: Publisher contains identifying and descriptive information about
+      a publisher
     properties:
-      base_url:
-        type: string
-      description:
-        type: string
-      favicon:
-        type: string
-      site_name:
-        type: string
       source:
+        type: string
+      source_base_url:
+        type: string
+      source_description:
+        type: string
+      source_favicon:
+        type: string
+      source_site_name:
         type: string
     type: object
 info:
@@ -76,60 +103,78 @@ paths:
     get:
       consumes:
       - application/json
-      description: Searches for the latest articles/news/blogs. For vector search
-        (when `q` is provided), results are sorted by relevance; otherwise results
-        are sorted by publication date (newest first).
+      description: Retrieves the most recently published articles, sorted by publish
+        date (newest first).
       parameters:
-      - description: search query (min length 3, max length 512)
+      - description: optional semantic search query (character length 3-512)
         in: query
-        maxLength: 512
         name: q
         type: string
       - default: 0.75
-        description: accuracy (0-1) used as cosine similarity threshold; higher values
-          return fewer, more similar results
+        description: embedding accuracy/similarity threshold (0.0-1.0)
         in: query
         maximum: 1
         minimum: 0
         name: acc
         type: number
-      - description: kind filter (news, blog, etc.)
+      - description: content type filter (news, blog, post, etc.)
         in: query
         name: kind
         type: string
-      - collectionFormat: multi
-        description: tags (categories, regions, entities) to filter by
+      - collectionFormat: csv
+        description: case/whitespace-insensitive text search across categories, regions,
+          entities (recommended)
         in: query
         items:
           type: string
         name: tags
         type: array
-      - collectionFormat: multi
-        description: sources/publisher ids to filter by
+      - collectionFormat: csv
+        description: precise category filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: categories
+        type: array
+      - collectionFormat: csv
+        description: precise region filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: regions
+        type: array
+      - collectionFormat: csv
+        description: precise entity filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: entities
+        type: array
+      - collectionFormat: csv
+        description: publisher source filters (inclusive OR)
         in: query
         items:
           type: string
         name: sources
         type: array
-      - default: last 7 days
-        description: published since (YYYY-MM-DD)
+      - description: published since date (YYYY-MM-DD, defaults to 7 days ago if omitted)
         format: date
         in: query
-        name: published_since
+        name: from
         type: string
       - default: false
-        description: include content
+        description: include full article content
         in: query
-        name: with_content
+        name: full_content
         type: boolean
       - default: 16
-        description: limit
+        description: page limit
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset
         in: query
         name: offset
         type: integer
@@ -137,81 +182,331 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: array of latest articles sorted by publish date
           schema:
             items:
-              $ref: '#/definitions/beansack.Bean'
+              $ref: '#/definitions/beansack.BeanAggregate'
             type: array
         "400":
-          description: error message
+          description: 'bad request: invalid parameters'
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
-          description: error message
+          description: database or embedder error
           schema:
-            type: string
-      summary: Get latest articles
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get latest articles (reverse chronological)
+      tags:
+      - Articles
+  /articles/search:
+    get:
+      consumes:
+      - application/json
+      description: Perform semantic (vector embedding) or tag-based search across
+        all articles in the database.
+      parameters:
+      - description: semantic vector search query (character length 3-512, natural
+          language)
+        in: query
+        name: q
+        type: string
+      - default: 0.75
+        description: embedding accuracy/similarity threshold (0.0-1.0, higher = stricter
+          match)
+        in: query
+        maximum: 1
+        minimum: 0
+        name: acc
+        type: number
+      - description: content type filter (news, blog, post, generated, comment, etc.)
+        in: query
+        name: content_type
+        type: string
+      - collectionFormat: csv
+        description: specific article URLs to fetch directly (CSV)
+        in: query
+        items:
+          type: string
+        name: urls
+        type: array
+      - collectionFormat: csv
+        description: case/whitespace-insensitive text search across categories, regions,
+          entities (AND combination, recommended)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      - collectionFormat: csv
+        description: precise category topic filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: categories
+        type: array
+      - collectionFormat: csv
+        description: precise geographic region filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: regions
+        type: array
+      - collectionFormat: csv
+        description: precise named entity filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: entities
+        type: array
+      - collectionFormat: csv
+        description: publisher/source ID filters (inclusive OR)
+        in: query
+        items:
+          type: string
+        name: sources
+        type: array
+      - description: published/updated since date (ISO 8601 date format YYYY-MM-DD)
+        format: date
+        in: query
+        name: from
+        type: string
+      - default: false
+        description: if true, include full article content (large payload)
+        in: query
+        name: full_content
+        type: boolean
+      - default: 16
+        description: page limit (items per page)
+        in: query
+        maximum: 128
+        minimum: 1
+        name: limit
+        type: integer
+      - description: pagination offset (number of items to skip)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: array of article aggregates with engagement metrics
+          schema:
+            items:
+              $ref: '#/definitions/beansack.BeanAggregate'
+            type: array
+        "400":
+          description: 'bad request: missing required search parameters or invalid
+            input'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: database or embedder error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Semantic/tag-based article search
+      tags:
+      - Articles
+  /articles/top-headlines:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves top trending headlines from the past 24 hours, ranked
+        by trend score.
+      parameters:
+      - description: optional semantic search query (character length 3-512)
+        in: query
+        name: q
+        type: string
+      - default: 0.75
+        description: embedding accuracy/similarity threshold (0.0-1.0)
+        in: query
+        maximum: 1
+        minimum: 0
+        name: acc
+        type: number
+      - description: content type filter (news, blog, post, etc.)
+        in: query
+        name: kind
+        type: string
+      - collectionFormat: csv
+        description: case/whitespace-insensitive text search across categories, regions,
+          entities (recommended)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      - collectionFormat: csv
+        description: precise category filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: categories
+        type: array
+      - collectionFormat: csv
+        description: precise region filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: regions
+        type: array
+      - collectionFormat: csv
+        description: precise entity filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: entities
+        type: array
+      - collectionFormat: csv
+        description: publisher source filters (inclusive OR)
+        in: query
+        items:
+          type: string
+        name: sources
+        type: array
+      - default: false
+        description: include full article content
+        in: query
+        name: full_content
+        type: boolean
+      - default: 16
+        description: page limit
+        in: query
+        maximum: 128
+        minimum: 1
+        name: limit
+        type: integer
+      - description: pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: array of top headlines from last 24h, sorted by trend_score
+          schema:
+            items:
+              $ref: '#/definitions/beansack.BeanAggregate'
+            type: array
+        "400":
+          description: 'bad request: invalid parameters'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: database or embedder error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get top headlines (last 24 hours)
       tags:
       - Articles
   /articles/trending:
     get:
       consumes:
       - application/json
-      description: Searches for trending articles/news/blogs. For vector search (when
-        `q` is provided), results are sorted by relevance; otherwise they are sorted
-        by an internal trend score computed from social engagement metrics (comments,
-        likes, shares, last engagement, etc.).
+      description: 'Retrieves trending articles ranked by trend score. Trend score
+        is computed from:'
       parameters:
-      - description: search query (min length 3, max length 512)
+      - description: optional semantic search query (character length 3-512)
         in: query
-        maxLength: 512
         name: q
         type: string
       - default: 0.75
-        description: accuracy (0-1) used as cosine similarity threshold; higher values
-          return fewer, more similar results
+        description: embedding accuracy/similarity threshold (0.0-1.0, higher = stricter)
         in: query
         maximum: 1
         minimum: 0
         name: acc
         type: number
-      - description: kind filter (news, blog, etc.)
+      - description: content type filter (news, blog, post, etc.)
         in: query
         name: kind
         type: string
-      - collectionFormat: multi
-        description: tags (categories, regions, entities) to filter by
+      - collectionFormat: csv
+        description: case/whitespace-insensitive text search across categories, regions,
+          entities (recommended)
         in: query
         items:
           type: string
         name: tags
         type: array
-      - collectionFormat: multi
-        description: sources/publisher ids to filter by
+      - collectionFormat: csv
+        description: precise category filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: categories
+        type: array
+      - collectionFormat: csv
+        description: precise region filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: regions
+        type: array
+      - collectionFormat: csv
+        description: precise entity filters (inclusive OR, case/whitespace-sensitive)
+        in: query
+        items:
+          type: string
+        name: entities
+        type: array
+      - collectionFormat: csv
+        description: publisher source filters (inclusive OR)
         in: query
         items:
           type: string
         name: sources
         type: array
-      - default: last 7 days
-        description: trending since (YYYY-MM-DD)
+      - description: trending since date (YYYY-MM-DD, defaults to 7 days ago)
         format: date
         in: query
-        name: trending_since
+        name: from
         type: string
       - default: false
-        description: include content
+        description: include full article content
         in: query
-        name: with_content
+        name: full_content
         type: boolean
       - default: 16
-        description: limit
+        description: page limit
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset
         in: query
         name: offset
         type: integer
@@ -219,19 +514,29 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: array of trending articles sorted by trend_score (descending)
           schema:
             items:
-              $ref: '#/definitions/beansack.Bean'
+              $ref: '#/definitions/beansack.BeanAggregate'
             type: array
         "400":
-          description: error message
+          description: 'bad request: invalid parameters'
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
-          description: error message
+          description: database or embedder error
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
       summary: Get trending articles
       tags:
       - Articles
@@ -252,11 +557,11 @@ paths:
       - Health
   /publishers:
     get:
-      description: Retrieves publisher metadata filtered by one or more publisher
-        IDs.
+      description: Retrieves detailed metadata for one or more sources including site
+        name, description, favicon, and RSS feed info.
       parameters:
-      - collectionFormat: multi
-        description: sources/publisher ids to include
+      - collectionFormat: csv
+        description: source IDs to fetch metadata for (required, comma-separated CSV)
         in: query
         items:
           type: string
@@ -264,13 +569,13 @@ paths:
         required: true
         type: array
       - default: 16
-        description: limit
+        description: page limit (items per page)
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset (number of items to skip)
         in: query
         name: offset
         type: integer
@@ -278,35 +583,44 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: array of publisher metadata objects
           schema:
             items:
               $ref: '#/definitions/beansack.Publisher'
             type: array
         "400":
-          description: error message
+          description: 'bad request: missing or invalid sources parameter'
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
-          description: error message
+          description: database error
           schema:
-            type: string
-      summary: Query publishers
+            additionalProperties:
+              type: string
+            type: object
+      summary: Query source metadata
       tags:
       - Publishers
   /publishers/sources:
     get:
-      description: Retrieves a list of unique publisher IDs (paginated) from which
-        articles are sourced.
+      description: Retrieves a paginated list of unique publisher source IDs and identifiers.
       parameters:
       - default: 16
-        description: limit
+        description: page limit (items per page)
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset (number of items to skip)
         in: query
         name: offset
         type: integer
@@ -314,32 +628,39 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: list of source/publisher ID strings
           schema:
             items:
               type: string
             type: array
-        "500":
-          description: error message
+        "401":
+          description: 'unauthorized: missing or invalid API key'
           schema:
-            type: string
-      summary: List sources
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: database error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List available sources
       tags:
       - Publishers
   /tags/categories:
     get:
-      description: 'Retrieves a list of unique values of article categories/topics
-        (paginated), for example: Artificial Intelligence, Cybersecurity, Politics,
-        Software Engineering, etc.'
+      description: Retrieves a paginated list of unique article categories/topics
+        discovered in the database.
       parameters:
       - default: 16
-        description: limit
+        description: page limit (items per page)
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset (number of items to skip)
         in: query
         name: offset
         type: integer
@@ -347,31 +668,39 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: list of category strings
           schema:
             items:
               type: string
             type: array
-        "500":
-          description: error message
+        "401":
+          description: 'unauthorized: missing or invalid API key'
           schema:
-            type: string
-      summary: List categories
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: database error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List article categories
       tags:
       - Tags
   /tags/entities:
     get:
-      description: Retrieves a list of unique named entities (paginated), such as
-        people, organizations, and products mentioned in articles.
+      description: Retrieves a paginated list of unique named entities (persons, organizations,
+        products, places) extracted from articles.
       parameters:
       - default: 16
-        description: limit
+        description: page limit (items per page)
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset (number of items to skip)
         in: query
         name: offset
         type: integer
@@ -379,31 +708,39 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: list of entity strings
           schema:
             items:
               type: string
             type: array
-        "500":
-          description: error message
+        "401":
+          description: 'unauthorized: missing or invalid API key'
           schema:
-            type: string
-      summary: List entities
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: database error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List named entities
       tags:
       - Tags
   /tags/regions:
     get:
-      description: Retrieves a list of unique geographic regions (paginated) mentioned
-        in articles, e.g., UK, US, Europe.
+      description: Retrieves a paginated list of unique geographic regions mentioned
+        in articles.
       parameters:
       - default: 16
-        description: limit
+        description: page limit (items per page)
         in: query
         maximum: 128
         minimum: 1
         name: limit
         type: integer
-      - description: offset
+      - description: pagination offset (number of items to skip)
         in: query
         name: offset
         type: integer
@@ -411,16 +748,24 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: list of region strings
           schema:
             items:
               type: string
             type: array
-        "500":
-          description: error message
+        "401":
+          description: 'unauthorized: missing or invalid API key'
           schema:
-            type: string
-      summary: List regions
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: database error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List geographic regions
       tags:
       - Tags
 schemes:
