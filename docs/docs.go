@@ -147,6 +147,9 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "400": {
                         "description": "bad request: invalid parameters",
                         "schema": {
@@ -158,6 +161,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -312,6 +324,9 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "400": {
                         "description": "bad request: missing required search parameters or invalid input",
                         "schema": {
@@ -323,6 +338,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -460,6 +484,9 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "400": {
                         "description": "bad request: invalid parameters",
                         "schema": {
@@ -471,6 +498,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -615,6 +651,9 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "400": {
                         "description": "bad request: invalid parameters",
                         "schema": {
@@ -626,6 +665,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -670,7 +718,7 @@ const docTemplate = `{
         },
         "/publishers": {
             "get": {
-                "description": "Retrieves detailed metadata for one or more sources including site name, description, favicon, and RSS feed info.",
+                "description": "Retrieves detailed metadata for one or more sources including site name, description, favicon.",
                 "produces": [
                     "application/json"
                 ],
@@ -685,7 +733,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "source IDs to fetch metadata for (required, comma-separated CSV)",
+                        "description": "source IDs to fetch metadata for (comma-separated CSV)",
                         "name": "sources",
                         "in": "query",
                         "required": true
@@ -716,6 +764,9 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "400": {
                         "description": "bad request: missing or invalid sources parameter",
                         "schema": {
@@ -734,57 +785,8 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "500": {
-                        "description": "database error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/publishers/sources": {
-            "get": {
-                "description": "Retrieves a paginated list of unique publisher source IDs and identifiers.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Publishers"
-                ],
-                "summary": "List available sources",
-                "parameters": [
-                    {
-                        "maximum": 128,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 16,
-                        "description": "page limit (items per page)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "pagination offset (number of items to skip)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "list of source/publisher ID strings",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -841,8 +843,20 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -899,8 +913,20 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -957,8 +983,20 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "204": {
+                        "description": "no data available"
+                    },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "rate limit exceeded",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {

@@ -187,6 +187,8 @@ paths:
             items:
               $ref: '#/definitions/beansack.BeanAggregate'
             type: array
+        "204":
+          description: no data available
         "400":
           description: 'bad request: invalid parameters'
           schema:
@@ -195,6 +197,12 @@ paths:
             type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -305,6 +313,8 @@ paths:
             items:
               $ref: '#/definitions/beansack.BeanAggregate'
             type: array
+        "204":
+          description: no data available
         "400":
           description: 'bad request: missing required search parameters or invalid
             input'
@@ -314,6 +324,12 @@ paths:
             type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -410,6 +426,8 @@ paths:
             items:
               $ref: '#/definitions/beansack.BeanAggregate'
             type: array
+        "204":
+          description: no data available
         "400":
           description: 'bad request: invalid parameters'
           schema:
@@ -418,6 +436,12 @@ paths:
             type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -519,6 +543,8 @@ paths:
             items:
               $ref: '#/definitions/beansack.BeanAggregate'
             type: array
+        "204":
+          description: no data available
         "400":
           description: 'bad request: invalid parameters'
           schema:
@@ -527,6 +553,12 @@ paths:
             type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -558,10 +590,10 @@ paths:
   /publishers:
     get:
       description: Retrieves detailed metadata for one or more sources including site
-        name, description, favicon, and RSS feed info.
+        name, description, favicon.
       parameters:
       - collectionFormat: csv
-        description: source IDs to fetch metadata for (required, comma-separated CSV)
+        description: source IDs to fetch metadata for (comma-separated CSV)
         in: query
         items:
           type: string
@@ -588,6 +620,8 @@ paths:
             items:
               $ref: '#/definitions/beansack.Publisher'
             type: array
+        "204":
+          description: no data available
         "400":
           description: 'bad request: missing or invalid sources parameter'
           schema:
@@ -600,6 +634,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "429":
+          description: rate limit exceeded
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: database error
           schema:
@@ -607,45 +647,6 @@ paths:
               type: string
             type: object
       summary: Query source metadata
-      tags:
-      - Publishers
-  /publishers/sources:
-    get:
-      description: Retrieves a paginated list of unique publisher source IDs and identifiers.
-      parameters:
-      - default: 16
-        description: page limit (items per page)
-        in: query
-        maximum: 128
-        minimum: 1
-        name: limit
-        type: integer
-      - description: pagination offset (number of items to skip)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: list of source/publisher ID strings
-          schema:
-            items:
-              type: string
-            type: array
-        "401":
-          description: 'unauthorized: missing or invalid API key'
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: database error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List available sources
       tags:
       - Publishers
   /tags/categories:
@@ -673,8 +674,16 @@ paths:
             items:
               type: string
             type: array
+        "204":
+          description: no data available
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -713,8 +722,16 @@ paths:
             items:
               type: string
             type: array
+        "204":
+          description: no data available
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string
@@ -753,8 +770,16 @@ paths:
             items:
               type: string
             type: array
+        "204":
+          description: no data available
         "401":
           description: 'unauthorized: missing or invalid API key'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: rate limit exceeded
           schema:
             additionalProperties:
               type: string

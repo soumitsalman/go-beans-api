@@ -131,7 +131,9 @@ func validateTagsParams(c *gin.Context) {
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset (number of items to skip)"
 // @Success 200 {array} string "list of category strings"
+// @Success 204 "no data available"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
 // @Router /tags/categories [get]
 func (r *Configuration) getCategories(c *gin.Context) {
@@ -149,7 +151,9 @@ func (r *Configuration) getCategories(c *gin.Context) {
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset (number of items to skip)"
 // @Success 200 {array} string "list of entity strings"
+// @Success 204 "no data available"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
 // @Router /tags/entities [get]
 func (r *Configuration) getEntities(c *gin.Context) {
@@ -167,7 +171,9 @@ func (r *Configuration) getEntities(c *gin.Context) {
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset (number of items to skip)"
 // @Success 200 {array} string "list of region strings"
+// @Success 204 "no data available"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
 // @Router /tags/regions [get]
 func (r *Configuration) getRegions(c *gin.Context) {
@@ -188,36 +194,38 @@ func validatePublishersParams(c *gin.Context) {
 	c.Next()
 }
 
-// getSources godoc
-// @Summary List available sources
-// @Description Retrieves a paginated list of unique publisher source IDs and identifiers.
-// Use these source IDs with other endpoints to filter content by specific publishers.
-// @Tags Publishers
-// @Produce json
-// @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)"
-// @Success 200 {array} string "list of source/publisher ID strings"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 500 {object} map[string]string "database error"
-// @Router /publishers/sources [get]
-func (r *Configuration) getSources(c *gin.Context) {
-	page := c.MustGet("req_page").(bs.Pagination)
-	items, err := r.DB.DistinctSources(c.Request.Context(), page)
-	returnResponse(c, items, err)
-}
+// NOTE: removing this for now. its getting confusing
+// // getSources godoc
+// // @Summary List available sources
+// // @Description Retrieves a paginated list of unique publisher source IDs and identifiers.
+// // Use these source IDs with other endpoints to filter content by specific publishers.
+// // @Tags Publishers
+// // @Produce json
+// // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
+// // @Param offset query int false "pagination offset (number of items to skip)"
+// // @Success 200 {array} string "list of source/publisher ID strings"
+// // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// // @Failure 500 {object} map[string]string "database error"
+// // @Router /publishers/sources [get]
+// func (r *Configuration) getSources(c *gin.Context) {
+// 	page := c.MustGet("req_page").(bs.Pagination)
+// 	items, err := r.DB.DistinctSources(c.Request.Context(), page)
+// 	returnResponse(c, items, err)
+// }
 
 // getPublishers godoc
 // @Summary Query source metadata
-// @Description Retrieves detailed metadata for one or more sources including site name, description, favicon, and RSS feed info.
-// Requires at least one source ID. Use /sources endpoint to discover available source IDs.
+// @Description Retrieves detailed metadata for one or more sources including site name, description, favicon.
 // @Tags Publishers
 // @Produce json
-// @Param sources query []string true "source IDs to fetch metadata for (required, comma-separated CSV)" collectionFormat(csv)
+// @Param sources query []string true "source IDs to fetch metadata for (comma-separated CSV)" collectionFormat(csv)
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset (number of items to skip)"
 // @Success 200 {array} beansack.Publisher "array of publisher metadata objects"
+// @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: missing or invalid sources parameter"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
 // @Router /publishers [get]
 func (r *Configuration) getPublishers(c *gin.Context) {
@@ -296,8 +304,10 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset (number of items to skip)"
 // @Success 200 {array} beansack.BeanAggregate "array of article aggregates with engagement metrics"
+// @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: missing required search parameters or invalid input"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database or embedder error"
 // @Router /articles/search [get]
 // this one searches through the entire database and returns result sorted by relevance.
@@ -350,8 +360,10 @@ func (r *Configuration) searchArticles(c *gin.Context) {
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset"
 // @Success 200 {array} beansack.BeanAggregate "array of latest articles sorted by publish date"
+// @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database or embedder error"
 // @Router /articles/latest [get]
 func (r *Configuration) getLatestArticles(c *gin.Context) {
@@ -394,8 +406,10 @@ func (r *Configuration) getLatestArticles(c *gin.Context) {
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset"
 // @Success 200 {array} beansack.BeanAggregate "array of trending articles sorted by trend_score (descending)"
+// @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database or embedder error"
 // @Router /articles/trending [get]
 func (r *Configuration) getTrendingArticles(c *gin.Context) {
@@ -434,8 +448,10 @@ func (r *Configuration) getTrendingArticles(c *gin.Context) {
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset"
 // @Success 200 {array} beansack.BeanAggregate "array of top headlines from last 24h, sorted by trend_score"
+// @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
+// @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database or embedder error"
 // @Router /articles/top-headlines [get]
 func (r *Configuration) getTopHeadlinesArticles(c *gin.Context) {
@@ -483,8 +499,8 @@ func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string
 	}
 	publishers := protected.Group("/sources", validatePublishersParams)
 	{
-		publishers.GET("", config.getSources)
-		publishers.GET("/metadata", config.getPublishers)
+		publishers.GET("", config.getPublishers)
+		// publishers.GET("/metadata", config.getPublishers)
 	}
 	articles := protected.Group("/articles", config.validateArticlesParams)
 	{
