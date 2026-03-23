@@ -40,8 +40,8 @@ jobs:
                         - name: main
                           image: docker.io/soumitsr/beans-api:${GITHUB_SHA}
                           resources:
-                            cpu: 0.25
-                            memory: 0.5Gi
+                            cpu: 0.5
+                            memory: 1Gi
                           env:
                           - name: PG_CONNECTION_STRING
                             secretRef: pg-connection-string
