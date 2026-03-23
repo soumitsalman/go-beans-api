@@ -69,9 +69,11 @@ require (
 )
 
 require (
+	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
+	github.com/maypok86/otter/v2 v2.3.0
 	github.com/pgvector/pgvector-go v0.3.0
 	github.com/rs/zerolog v1.34.0
 	github.com/soumitsalman/data-utils v0.0.0-20240411181743-1067a6fce2ca

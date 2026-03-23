@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/maypok86/otter/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -31,6 +33,11 @@ const (
 	MAX_LIMIT           = 128
 	FAVICON_PATH        = "./images/beans.png"
 	DEFAULT_CONCURRENCY = 512
+)
+
+const (
+	_CACHE_SIZE = 1000
+	_CACHE_TTL  = 30 * time.Minute
 )
 
 const (
@@ -97,6 +104,7 @@ type Configuration struct {
 	Embedder nlp.Embedder
 	APIKeys  map[string]string
 	queue    chan int
+	cache    *otter.Cache[string, []float32]
 }
 
 // health
@@ -231,10 +239,6 @@ func validatePublishersParams(c *gin.Context) {
 func (r *Configuration) getPublishers(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
 	page := c.MustGet("req_page").(bs.Pagination)
-	// if len(conditions.Sources) == 0 {
-	// 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing required parameter: sources"})
-	// 	return
-	// }
 	items, err := r.DB.QueryPublishers(c.Request.Context(), conditions, page, []string{bs.CORE_PUBLISHER_FIELDS})
 	returnResponse(c, items, err)
 }
@@ -262,10 +266,15 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 	}
 	if input.Q != "" {
 		conditions.Distance = 1 - input.Acc
-		conditions.Embedding = config.Embedder.EmbedQuery(c, input.Q)
-		if len(conditions.Embedding) == 0 {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _EMBEDDER_ERROR})
-			return
+		if embedding, found := config.cache.GetIfPresent(input.Q); found {
+			conditions.Embedding = embedding
+		} else {
+			conditions.Embedding = config.Embedder.EmbedQuery(c, input.Q)
+			if len(conditions.Embedding) == 0 {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _EMBEDDER_ERROR})
+				return
+			}
+			config.cache.Set(input.Q, conditions.Embedding)
 		}
 	}
 	columns := []string{bs.CORE_BEAN_FIELDS}
@@ -473,11 +482,28 @@ func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string
 		Embedder: embedder,
 		APIKeys:  api_keys,
 		queue:    make(chan int, max_concurrent_requests),
+		cache: otter.Must(&otter.Options[string, []float32]{
+			MaximumSize:      _CACHE_SIZE,
+			ExpiryCalculator: otter.ExpiryAccessing[string, []float32](_CACHE_TTL),
+		}),
 	}
 
 	router := gin.New()
 	// JSON access logs and recovery using zerolog
-	router.Use(requestLogger, gin.Recovery())
+	router.Use(
+		// logger
+		requestLogger,
+		// recovery
+		gin.Recovery(),
+		// cors
+		cors.New(cors.Config{
+			AllowAllOrigins:  true,
+			AllowMethods:     []string{"GET", "OPTIONS"},
+			AllowHeaders:     []string{"*"},
+			AllowCredentials: false,
+			MaxAge:           24 * time.Hour,
+		}),
+	)
 
 	// Swagger / OpenAPI endpoints
 	// NOTE: run `swag init` to generate docs (package `docs`) before using the UI.
