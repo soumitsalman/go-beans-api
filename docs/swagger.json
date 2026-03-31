@@ -5,7 +5,7 @@
     "swagger": "2.0",
     "info": {
         "description": "Beans is an intelligent news \u0026 blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.",
-        "title": "Beans API \u0026 MCP",
+        "title": "Beans News API \u0026 MCP",
         "contact": {
             "name": "Project Cafecito",
             "url": "http://cafecito.tech",
@@ -1063,7 +1063,7 @@
                     "description": "ClusterSize is the total number of Beans in the same related-content cluster.",
                     "type": "integer"
                 },
-                "publish_date": {
+                "published_at": {
                     "description": "Created is the original publish timestamp of the article or post.",
                     "type": "string",
                     "format": "date-time"

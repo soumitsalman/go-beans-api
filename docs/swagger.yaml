@@ -44,7 +44,7 @@ definitions:
         description: ClusterSize is the total number of Beans in the same related-content
           cluster.
         type: integer
-      publish_date:
+      published_at:
         description: Created is the original publish timestamp of the article or post.
         format: date-time
         type: string
@@ -142,7 +142,7 @@ info:
     and filters.
   license:
     name: MIT
-  title: Beans API & MCP
+  title: Beans News API & MCP
   version: "0.1"
 paths:
   /articles/latest:

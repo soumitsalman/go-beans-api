@@ -66,7 +66,7 @@ type Bean struct {
 	// ImageUrl is the featured image or preview image associated with the content.
 	ImageUrl string `db:"image_url" json:"image_url,omitempty"`
 	// Created is the original publish timestamp of the article or post.
-	Created time.Time `db:"created" json:"publish_date,omitempty,omitzero" swaggertype:"string" format:"date-time"`
+	Created time.Time `db:"created" json:"published_at,omitempty,omitzero" swaggertype:"string" format:"date-time"`
 	// Embedding stores the semantic vector used for similarity search and is not returned in JSON.
 	Embedding []float32 `db:"embedding" json:"-"`
 	// Gist stores internal highlights extracted from the content and is not returned in JSON.

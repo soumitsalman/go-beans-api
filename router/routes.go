@@ -1,4 +1,4 @@
-// @title 			Beans API & MCP
+// @title 			Beans News API & MCP
 // @version 		0.1
 // @description 	Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.
 // @schemes 		https

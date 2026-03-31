@@ -1068,7 +1068,7 @@ const docTemplate = `{
                     "description": "ClusterSize is the total number of Beans in the same related-content cluster.",
                     "type": "integer"
                 },
-                "publish_date": {
+                "published_at": {
                     "description": "Created is the original publish timestamp of the article or post.",
                     "type": "string",
                     "format": "date-time"
@@ -1182,7 +1182,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{"https"},
-	Title:            "Beans API & MCP",
+	Title:            "Beans News API & MCP",
 	Description:      "Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
