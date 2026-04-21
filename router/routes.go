@@ -47,7 +47,7 @@ const (
 )
 
 const (
-	_BEAN_TREND_FIELDS = "likes, comments, shares, trend_score"
+	_BEAN_TREND_FIELDS = "likes, comments, shares, related, trend_score"
 )
 
 type PaginationInput struct {
@@ -259,7 +259,7 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 		Regions:    input.Regions,
 		Entities:   input.Entities,
 		Sources:    input.Sources,
-		Extra:      []string{bs.PROCESSED_BEANS_CONDITIONS},
+		Extra:      []string{},
 	}
 	if input.FullContent {
 		conditions.Extra = append(conditions.Extra, bs.UNRESTRICTED_CONTENT_CONDITIONS)
@@ -368,7 +368,7 @@ func (r *Configuration) searchArticles(c *gin.Context) {
 // @Param full_content query bool false "include full article content" default(false)
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset"
-// @Success 200 {array} beansack.BeanAggregate "array of latest articles sorted by publish date"
+// @Success 200 {array} beansack.Bean "array of latest articles sorted by publish date"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
@@ -414,7 +414,7 @@ func (r *Configuration) getLatestArticles(c *gin.Context) {
 // @Param full_content query bool false "include full article content" default(false)
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset"
-// @Success 200 {array} beansack.BeanAggregate "array of trending articles sorted by trend_score (descending)"
+// @Success 200 {array} beansack.BeanTrend "array of trending articles sorted by trend_score (descending)"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
@@ -456,7 +456,7 @@ func (r *Configuration) getTrendingArticles(c *gin.Context) {
 // @Param full_content query bool false "include full article content" default(false)
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
 // @Param offset query int false "pagination offset"
-// @Success 200 {array} beansack.BeanAggregate "array of top headlines from last 24h, sorted by trend_score"
+// @Success 200 {array} beansack.BeanTrend "array of top headlines from last 24h, sorted by trend_score"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
@@ -580,7 +580,7 @@ func requestLogger(c *gin.Context) {
 		Str("path", c.Request.URL.Path).
 		Interface("query", c.Request.URL.Query()).
 		Int("status", status).
-		Dur("latency", time.Since(start))
+		Float64("latency", time.Since(start).Seconds())
 
 	if len(c.Errors) > 0 {
 		evt.Str("error", c.Errors.String())
@@ -590,7 +590,6 @@ func requestLogger(c *gin.Context) {
 
 func returnResponse[T any](c *gin.Context, items []T, err error) {
 	if err != nil {
-
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _DB_ERROR})
 		return
 	}

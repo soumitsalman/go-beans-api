@@ -63,20 +63,20 @@ func (p *PGSack) QueryBeans(ctx context.Context, conditions Condition, page Pagi
 	return datautils.Transform(items, func(item *dataRow) BeanAggregate { return item.toBeanAggregate() }), nil
 }
 
-func (p *PGSack) QueryLatestBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error) {
+func (p *PGSack) QueryLatestBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Bean, error) {
 	items, err := fetchBeans(ctx, p, BEANS, conditions, []string{ORDER_BY_LATEST}, page, columns)
 	if err != nil {
 		return nil, err
 	}
-	return datautils.Transform(items, func(item *dataRow) BeanAggregate { return item.toBeanAggregate() }), nil
+	return datautils.Transform(items, func(item *dataRow) Bean { return item.toBean() }), nil
 }
 
-func (p *PGSack) QueryTrendingBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error) {
+func (p *PGSack) QueryTrendingBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanTrend, error) {
 	items, err := fetchBeans(ctx, p, _TRENDING_BEANS_VIEW, conditions, []string{ORDER_BY_TRENDING}, page, columns)
 	if err != nil {
 		return nil, err
 	}
-	return datautils.Transform(items, func(item *dataRow) BeanAggregate { return item.toBeanAggregate() }), nil
+	return datautils.Transform(items, func(item *dataRow) BeanTrend { return item.toBeanTrend() }), nil
 }
 
 // TODO: how to pass in text/tag/keyword based search
@@ -192,7 +192,7 @@ func (p *PGSack) buildSQL(table string, conditions Condition, orders []string, p
 		builder.WriteString(page_expr)
 	}
 	query, args := builder.String(), mergeParams(base_params, where_params, page_params)
-	LogQuery(query, args)
+	// LogQuery(query, args)
 	return query, args
 }
 
@@ -355,8 +355,7 @@ type dataRow struct {
 	Sentiments  []string        `db:"sentiments"`
 	Regions     []string        `db:"regions"`
 	Entities    []string        `db:"entities"`
-	Related     []string        `db:"related"`
-	ClusterId   sql.NullString  `db:"cluster_id"`
+	Related     sql.NullInt64   `db:"related"`
 	ClusterSize sql.NullInt64   `db:"cluster_size"`
 	Updated     sql.NullTime    `db:"updated"`
 	Likes       sql.NullInt64   `db:"likes"`
@@ -393,27 +392,30 @@ func (r *dataRow) toBean() Bean {
 		Sentiments: r.Sentiments,
 		Regions:    r.Regions,
 		Entities:   r.Entities,
+		MergedTags: ConcatArray[string](r.Categories, r.Regions, r.Entities),
+	}
+}
+
+func (r *dataRow) toBeanTrend() BeanTrend {
+	return BeanTrend{
+		Bean:        r.toBean(),
+		Likes:       r.Likes.Int64,
+		Comments:    r.Comments.Int64,
+		Subscribers: r.Subscribers.Int64,
+		Shares:      r.Shares.Int64,
+		Related:     r.Related.Int64,
+		Updated:     r.Updated.Time,
+		TrendScore:  r.TrendScore,
 	}
 }
 
 func (r *dataRow) toBeanAggregate() BeanAggregate {
 	return BeanAggregate{
-		Bean:        r.toBean(),
+		BeanTrend:   r.toBeanTrend(),
 		BaseURL:     r.BaseURL.String,
 		SiteName:    r.SiteName.String,
 		Description: r.Description.String,
 		Favicon:     r.Favicon.String,
-		Likes:       r.Likes.Int64,
-		Comments:    r.Comments.Int64,
-		Subscribers: r.Subscribers.Int64,
-		Shares:      r.Shares.Int64,
-		Related:     r.Related,
-		ClusterId:   r.ClusterId.String,
-		ClusterSize: r.ClusterSize.Int64,
-		Updated:     r.Updated.Time,
-		Distance:    r.Distance,
-		TrendScore:  r.TrendScore,
-		MergedTags:  ConcatArray[string](r.Categories, r.Regions, r.Entities),
 	}
 }
 

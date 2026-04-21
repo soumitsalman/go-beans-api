@@ -79,6 +79,8 @@ type Bean struct {
 	Regions []string `db:"regions" json:"regions,omitempty"`
 	// Entities lists named entities such as people, places, organizations, or products.
 	Entities []string `db:"entities" json:"entities,omitempty"`
+	// Computed tags merged from categories/regions/entities for display
+	MergedTags []string `db:"-" json:"tags,omitempty"`
 }
 
 // Chatter represents short-form discussion metadata associated with a Bean.
@@ -148,31 +150,14 @@ type ChatterAggregate struct {
 	Shares int64 `db:"shares" json:"shares,omitempty"`
 }
 
-// BeanAggregate contains a `Bean` plus publisher metadata and aggregated analytics.
-// @Description BeanAggregate composes a `Bean` with the publisher's display fields
-// (BaseURL, SiteName, Description, Favicon) and aggregated social metrics
-// (Likes, Comments, Subscribers, Shares). It also includes computed and analytical
-// fields used by listing endpoints: `MergedTags` (computed union of categories/regions/entities),
-// `Related` (related URLs), `ClusterId`/`ClusterSize`, `Updated` timestamp, `Distance`
-// (for vector search), and `TrendScore`.
+// BeanTrend contains a `Bean` plus trend analytics.
+// @Description BeanTrend composes a `Bean` with aggregated social metrics (Likes, Comments, Subscribers, Shares, Related, Updated timestamp, TrendScore).
 //
 // Notes:
 // - `MergedTags` is a computed field (db:"-") that consolidates tag-like fields for UI display.
-// - Publisher `Source` remains on the embedded `Bean` and is the canonical source id.
-type BeanAggregate struct {
+type BeanTrend struct {
 	// Bean embeds the primary content record returned by article endpoints.
 	Bean
-	// Computed tags merged from categories/regions/entities for display
-	MergedTags []string `db:"-" json:"tags,omitempty"`
-
-	// BaseURL is the publisher's primary site URL copied onto aggregate results for convenience.
-	BaseURL string `db:"base_url" json:"source_base_url,omitempty"`
-	// SiteName is the human-readable name of the publisher copied onto aggregate results.
-	SiteName string `db:"site_name" json:"source_site_name,omitempty"`
-	// Description is the publisher description copied onto aggregate results.
-	Description string `db:"description" json:"source_description,omitempty"`
-	// Favicon is the publisher favicon URL copied onto aggregate results.
-	Favicon string `db:"favicon" json:"source_favicon,omitempty"`
 
 	// Likes is the aggregate number of likes or upvotes associated with this Bean.
 	Likes int64 `db:"likes" json:"likes,omitempty"`
@@ -182,17 +167,30 @@ type BeanAggregate struct {
 	Subscribers int64 `db:"subscribers" json:"subscribers,omitempty"`
 	// Shares is the aggregate number of reposts or share-like actions associated with this Bean.
 	Shares int64 `db:"shares" json:"shares,omitempty"`
-
 	// Related lists URLs of semantically or editorially related Beans.
-	Related []string `db:"related" json:"related,omitempty"`
-	// ClusterId identifies the related-content cluster containing this Bean.
-	ClusterId string `db:"cluster_id" json:"cluster_id,omitempty"`
-	// ClusterSize is the total number of Beans in the same related-content cluster.
-	ClusterSize int64 `db:"cluster_size" json:"num_related,omitempty"`
+	Related int64 `db:"related" json:"related,omitempty"`
 	// Updated is when aggregate analytics were last refreshed and is omitted from JSON responses.
 	Updated time.Time `db:"updated" json:"-" swaggertype:"string" format:"date-time"`
-	// Distance stores the internal vector-search distance used for ranking and is omitted from JSON responses.
-	Distance float64 `db:"distance" json:"-"`
 	// TrendScore is the computed ranking score used to order trending results.
 	TrendScore float64 `db:"trend_score" json:"trend_score,omitempty"`
+}
+
+// BeanAggregate contains a `BeanTrend` plus publisher metadata.
+// @Description BeanAggregate composes a `BeanTrend` with the publisher's display fields
+// (BaseURL, SiteName, Description, Favicon).
+//
+// Notes:
+// - Publisher `Source` remains on the embedded `Bean` and is the canonical source id.
+type BeanAggregate struct {
+	// Bean embeds the primary content record returned by article endpoints.
+	BeanTrend
+
+	// BaseURL is the publisher's primary site URL copied onto aggregate results for convenience.
+	BaseURL string `db:"base_url" json:"source_base_url,omitempty"`
+	// SiteName is the human-readable name of the publisher copied onto aggregate results.
+	SiteName string `db:"site_name" json:"source_site_name,omitempty"`
+	// Description is the publisher description copied onto aggregate results.
+	Description string `db:"description" json:"source_description,omitempty"`
+	// Favicon is the publisher favicon URL copied onto aggregate results.
+	Favicon string `db:"favicon" json:"source_favicon,omitempty"`
 }

@@ -19,8 +19,7 @@ const (
 const (
 	CORE_BEAN_FIELDS                = "url, kind, title, summary, author, source, image_url, created, categories, sentiments, regions, entities"
 	CORE_PUBLISHER_FIELDS           = "source, base_url, site_name, description, favicon"
-	EXTENDED_BEAN_FIELDS            = "url, kind, title, summary, author, source, image_url, created, categories, sentiments, regions, entities, base_url, site_name, description, favicon, likes, comments, shares, related, cluster_size, cluster_id"
-	PROCESSED_BEANS_CONDITIONS      = "gist IS NOT NULL AND embedding IS NOT NULL"
+	EXTENDED_BEAN_FIELDS            = "url, kind, title, summary, author, source, image_url, created, categories, sentiments, regions, entities, base_url, site_name, description, favicon, likes, comments, shares, related"
 	UNRESTRICTED_CONTENT_CONDITIONS = "restricted_content IS NULL AND content IS NOT NULL"
 	ORDER_BY_LATEST                 = "created DESC"
 	ORDER_BY_TRENDING               = "trend_score DESC"
@@ -52,8 +51,8 @@ type Pagination struct {
 
 type Beansack interface {
 	QueryBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error)
-	QueryLatestBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error)
-	QueryTrendingBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanAggregate, error)
+	QueryLatestBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Bean, error)
+	QueryTrendingBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanTrend, error)
 	QueryPublishers(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Publisher, error)
 	QueryChatters(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Chatter, error)
 
