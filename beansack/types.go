@@ -194,3 +194,28 @@ type BeanAggregate struct {
 	// Favicon is the publisher favicon URL copied onto aggregate results.
 	Favicon string `db:"favicon" json:"source_favicon,omitempty"`
 }
+
+// PropagationCoverage is the same story published by another outlet.
+type PropagationCoverage struct {
+	URL      string    `json:"url"`
+	Created  time.Time `json:"created" swaggertype:"string" format:"date-time"`
+	Source   string    `json:"source"`
+	SiteName string    `json:"site_name"`
+}
+
+// PropagationMention is a social/forum mention of an article from chatters.
+type PropagationMention struct {
+	ShareURL string    `json:"share_url"`
+	Source   string    `json:"source"`
+	Forum    string    `json:"forum,omitempty"`
+	Observed time.Time `json:"observed" swaggertype:"string" format:"date-time"`
+	Comments int64     `json:"comments,omitempty"`
+	Likes    int64     `json:"likes,omitempty"`
+}
+
+// PropagationResult groups publisher coverage and social mentions for one seed URL.
+type PropagationResult struct {
+	URL      string                `json:"url"`
+	Coverage []PropagationCoverage `json:"coverage"`
+	Mentions []PropagationMention  `json:"mentions"`
+}

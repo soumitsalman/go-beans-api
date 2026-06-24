@@ -9,14 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {
-            "name": "Project Cafecito",
-            "url": "http://cafecito.tech",
-            "email": "soumitsrah@cafecito.tech"
-        },
-        "license": {
-            "name": "MIT"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -131,6 +124,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset",
                         "name": "offset",
@@ -143,7 +137,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/beansack.BeanAggregate"
+                                "$ref": "#/definitions/beansack.Bean"
                             }
                         }
                     },
@@ -179,6 +173,172 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "database or embedder error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/propagation": {
+            "get": {
+                "description": "For each article URL, returns publisher coverage (from related_beans) and social mentions (from chatters).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Articles"
+                ],
+                "summary": "Get article propagation",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Article URLs (CSV, GET only, max 128)",
+                        "name": "urls",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "JSON body with urls array (POST only, max 128 items)",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/router.PropagationInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/beansack.PropagationResult"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "missing urls, too many urls (\u003e128), invalid URL, or binding error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "For each article URL, returns publisher coverage (from related_beans) and social mentions (from chatters).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Articles"
+                ],
+                "summary": "Get article propagation",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Article URLs (CSV, GET only, max 128)",
+                        "name": "urls",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "JSON body with urls array (POST only, max 128 items)",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/router.PropagationInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/beansack.PropagationResult"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "missing urls, too many urls (\u003e128), invalid URL, or binding error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -308,6 +468,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset (number of items to skip)",
                         "name": "offset",
@@ -468,6 +629,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset",
                         "name": "offset",
@@ -480,7 +642,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/beansack.BeanAggregate"
+                                "$ref": "#/definitions/beansack.BeanTrend"
                             }
                         }
                     },
@@ -635,6 +797,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset",
                         "name": "offset",
@@ -647,7 +810,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/beansack.BeanAggregate"
+                                "$ref": "#/definitions/beansack.BeanTrend"
                             }
                         }
                     },
@@ -716,7 +879,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/publishers": {
+        "/sources": {
             "get": {
                 "description": "Retrieves detailed metadata for one or more sources including site name, description, favicon.",
                 "produces": [
@@ -748,6 +911,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset (number of items to skip)",
                         "name": "offset",
@@ -768,7 +932,7 @@ const docTemplate = `{
                         "description": "no data available"
                     },
                     "400": {
-                        "description": "bad request: missing or invalid sources parameter",
+                        "description": "invalid pagination parameters or missing/invalid sources",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -827,6 +991,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset (number of items to skip)",
                         "name": "offset",
@@ -845,6 +1010,15 @@ const docTemplate = `{
                     },
                     "204": {
                         "description": "no data available"
+                    },
+                    "400": {
+                        "description": "invalid pagination parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
@@ -897,6 +1071,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset (number of items to skip)",
                         "name": "offset",
@@ -915,6 +1090,15 @@ const docTemplate = `{
                     },
                     "204": {
                         "description": "no data available"
+                    },
+                    "400": {
+                        "description": "invalid pagination parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
@@ -967,6 +1151,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
                         "description": "pagination offset (number of items to skip)",
                         "name": "offset",
@@ -985,6 +1170,15 @@ const docTemplate = `{
                     },
                     "204": {
                         "description": "no data available"
+                    },
+                    "400": {
+                        "description": "invalid pagination parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "401": {
                         "description": "unauthorized: missing or invalid API key",
@@ -1018,8 +1212,8 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "beansack.BeanAggregate": {
-            "description": "BeanAggregate composes a ` + "`" + `Bean` + "`" + ` with the publisher's display fields",
+        "beansack.Bean": {
+            "description": "Bean is the main content model returned by article endpoints. It contains",
             "type": "object",
             "properties": {
                 "author": {
@@ -1033,9 +1227,83 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "cluster_id": {
-                    "description": "ClusterId identifies the related-content cluster containing this Bean.",
+                "content": {
+                    "description": "Content is the full body text when the source content is available.",
                     "type": "string"
+                },
+                "content_type": {
+                    "description": "Kind is the content type, for example news, blog, post, generated, or comment.",
+                    "type": "string"
+                },
+                "entities": {
+                    "description": "Entities lists named entities such as people, places, organizations, or products.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "image_url": {
+                    "description": "ImageUrl is the featured image or preview image associated with the content.",
+                    "type": "string"
+                },
+                "published_at": {
+                    "description": "Created is the original publish timestamp of the article or post.",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "regions": {
+                    "description": "Regions lists geographic regions mentioned in or associated with the content.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sentiments": {
+                    "description": "Sentiments lists inferred tones or sentiments expressed in the content.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "source": {
+                    "description": "Source is the canonical publisher identifier and matches Publisher.Source.",
+                    "type": "string"
+                },
+                "summary": {
+                    "description": "Summary is a short abstract or teaser used in listings and previews.",
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "Computed tags merged from categories/regions/entities for display",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "Title is the human-readable headline or title of the content.",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "URL is the canonical URL of the article or post.",
+                    "type": "string"
+                }
+            }
+        },
+        "beansack.BeanAggregate": {
+            "description": "BeanAggregate composes a ` + "`" + `BeanTrend` + "`" + ` with the publisher's display fields",
+            "type": "object",
+            "properties": {
+                "author": {
+                    "description": "Author is the byline or attributed creator when available from the source.",
+                    "type": "string"
+                },
+                "categories": {
+                    "description": "Categories lists the inferred topics assigned to the content.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "comments": {
                     "description": "Comments is the aggregate number of replies or comments associated with this Bean.",
@@ -1064,10 +1332,6 @@ const docTemplate = `{
                     "description": "Likes is the aggregate number of likes or upvotes associated with this Bean.",
                     "type": "integer"
                 },
-                "num_related": {
-                    "description": "ClusterSize is the total number of Beans in the same related-content cluster.",
-                    "type": "integer"
-                },
                 "published_at": {
                     "description": "Created is the original publish timestamp of the article or post.",
                     "type": "string",
@@ -1082,10 +1346,7 @@ const docTemplate = `{
                 },
                 "related": {
                     "description": "Related lists URLs of semantically or editorially related Beans.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                    "type": "integer"
                 },
                 "sentiments": {
                     "description": "Sentiments lists inferred tones or sentiments expressed in the content.",
@@ -1147,6 +1408,170 @@ const docTemplate = `{
                 }
             }
         },
+        "beansack.BeanTrend": {
+            "description": "BeanTrend composes a ` + "`" + `Bean` + "`" + ` with aggregated social metrics (Likes, Comments, Subscribers, Shares, Related, Updated timestamp, TrendScore).",
+            "type": "object",
+            "properties": {
+                "author": {
+                    "description": "Author is the byline or attributed creator when available from the source.",
+                    "type": "string"
+                },
+                "categories": {
+                    "description": "Categories lists the inferred topics assigned to the content.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "comments": {
+                    "description": "Comments is the aggregate number of replies or comments associated with this Bean.",
+                    "type": "integer"
+                },
+                "content": {
+                    "description": "Content is the full body text when the source content is available.",
+                    "type": "string"
+                },
+                "content_type": {
+                    "description": "Kind is the content type, for example news, blog, post, generated, or comment.",
+                    "type": "string"
+                },
+                "entities": {
+                    "description": "Entities lists named entities such as people, places, organizations, or products.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "image_url": {
+                    "description": "ImageUrl is the featured image or preview image associated with the content.",
+                    "type": "string"
+                },
+                "likes": {
+                    "description": "Likes is the aggregate number of likes or upvotes associated with this Bean.",
+                    "type": "integer"
+                },
+                "published_at": {
+                    "description": "Created is the original publish timestamp of the article or post.",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "regions": {
+                    "description": "Regions lists geographic regions mentioned in or associated with the content.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "related": {
+                    "description": "Related lists URLs of semantically or editorially related Beans.",
+                    "type": "integer"
+                },
+                "sentiments": {
+                    "description": "Sentiments lists inferred tones or sentiments expressed in the content.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "shares": {
+                    "description": "Shares is the aggregate number of reposts or share-like actions associated with this Bean.",
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "Source is the canonical publisher identifier and matches Publisher.Source.",
+                    "type": "string"
+                },
+                "subscribers": {
+                    "description": "Subscribers is the aggregate audience size associated with this Bean's chatter.",
+                    "type": "integer"
+                },
+                "summary": {
+                    "description": "Summary is a short abstract or teaser used in listings and previews.",
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "Computed tags merged from categories/regions/entities for display",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "Title is the human-readable headline or title of the content.",
+                    "type": "string"
+                },
+                "trend_score": {
+                    "description": "TrendScore is the computed ranking score used to order trending results.",
+                    "type": "number"
+                },
+                "url": {
+                    "description": "URL is the canonical URL of the article or post.",
+                    "type": "string"
+                }
+            }
+        },
+        "beansack.PropagationCoverage": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "site_name": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "beansack.PropagationMention": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "integer"
+                },
+                "forum": {
+                    "type": "string"
+                },
+                "likes": {
+                    "type": "integer"
+                },
+                "observed": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "share_url": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "beansack.PropagationResult": {
+            "type": "object",
+            "properties": {
+                "coverage": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/beansack.PropagationCoverage"
+                    }
+                },
+                "mentions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/beansack.PropagationMention"
+                    }
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "beansack.Publisher": {
             "description": "Publisher contains identifying and descriptive information about a publisher",
             "type": "object",
@@ -1172,18 +1597,33 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "router.PropagationInput": {
+            "type": "object",
+            "required": [
+                "urls"
+            ],
+            "properties": {
+                "urls": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "0.1",
+	Version:          "",
 	Host:             "",
 	BasePath:         "",
-	Schemes:          []string{"https"},
-	Title:            "Beans News API & MCP",
-	Description:      "Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.",
+	Schemes:          []string{},
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -11,6 +11,7 @@ const (
 	BEANS            = "beans"
 	PUBLISHERS       = "publishers"
 	CHATTERS         = "chatters"
+	RELATED_BEANS    = "related_beans"
 	BEAN_RELATIONS   = "bean_relations"
 	FIXED_CATEGORIES = "fixed_categories"
 	FIXED_SENTIMENTS = "fixed_sentiments"
@@ -55,6 +56,7 @@ type Beansack interface {
 	QueryTrendingBeans(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]BeanTrend, error)
 	QueryPublishers(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Publisher, error)
 	QueryChatters(ctx context.Context, conditions Condition, page Pagination, columns []string) ([]Chatter, error)
+	QueryPropagation(ctx context.Context, urls []string) ([]PropagationResult, error)
 
 	DistinctCategories(ctx context.Context, page Pagination) ([]string, error)
 	DistinctSentiments(ctx context.Context, page Pagination) ([]string, error)

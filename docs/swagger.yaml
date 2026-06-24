@@ -1,6 +1,7 @@
 definitions:
-  beansack.BeanAggregate:
-    description: BeanAggregate composes a `Bean` with the publisher's display fields
+  beansack.Bean:
+    description: Bean is the main content model returned by article endpoints. It
+      contains
     properties:
       author:
         description: Author is the byline or attributed creator when available from
@@ -11,10 +12,70 @@ definitions:
         items:
           type: string
         type: array
-      cluster_id:
-        description: ClusterId identifies the related-content cluster containing this
-          Bean.
+      content:
+        description: Content is the full body text when the source content is available.
         type: string
+      content_type:
+        description: Kind is the content type, for example news, blog, post, generated,
+          or comment.
+        type: string
+      entities:
+        description: Entities lists named entities such as people, places, organizations,
+          or products.
+        items:
+          type: string
+        type: array
+      image_url:
+        description: ImageUrl is the featured image or preview image associated with
+          the content.
+        type: string
+      published_at:
+        description: Created is the original publish timestamp of the article or post.
+        format: date-time
+        type: string
+      regions:
+        description: Regions lists geographic regions mentioned in or associated with
+          the content.
+        items:
+          type: string
+        type: array
+      sentiments:
+        description: Sentiments lists inferred tones or sentiments expressed in the
+          content.
+        items:
+          type: string
+        type: array
+      source:
+        description: Source is the canonical publisher identifier and matches Publisher.Source.
+        type: string
+      summary:
+        description: Summary is a short abstract or teaser used in listings and previews.
+        type: string
+      tags:
+        description: Computed tags merged from categories/regions/entities for display
+        items:
+          type: string
+        type: array
+      title:
+        description: Title is the human-readable headline or title of the content.
+        type: string
+      url:
+        description: URL is the canonical URL of the article or post.
+        type: string
+    type: object
+  beansack.BeanAggregate:
+    description: BeanAggregate composes a `BeanTrend` with the publisher's display
+      fields
+    properties:
+      author:
+        description: Author is the byline or attributed creator when available from
+          the source.
+        type: string
+      categories:
+        description: Categories lists the inferred topics assigned to the content.
+        items:
+          type: string
+        type: array
       comments:
         description: Comments is the aggregate number of replies or comments associated
           with this Bean.
@@ -40,10 +101,6 @@ definitions:
         description: Likes is the aggregate number of likes or upvotes associated
           with this Bean.
         type: integer
-      num_related:
-        description: ClusterSize is the total number of Beans in the same related-content
-          cluster.
-        type: integer
       published_at:
         description: Created is the original publish timestamp of the article or post.
         format: date-time
@@ -56,9 +113,7 @@ definitions:
         type: array
       related:
         description: Related lists URLs of semantically or editorially related Beans.
-        items:
-          type: string
-        type: array
+        type: integer
       sentiments:
         description: Sentiments lists inferred tones or sentiments expressed in the
           content.
@@ -110,6 +165,134 @@ definitions:
         description: URL is the canonical URL of the article or post.
         type: string
     type: object
+  beansack.BeanTrend:
+    description: BeanTrend composes a `Bean` with aggregated social metrics (Likes,
+      Comments, Subscribers, Shares, Related, Updated timestamp, TrendScore).
+    properties:
+      author:
+        description: Author is the byline or attributed creator when available from
+          the source.
+        type: string
+      categories:
+        description: Categories lists the inferred topics assigned to the content.
+        items:
+          type: string
+        type: array
+      comments:
+        description: Comments is the aggregate number of replies or comments associated
+          with this Bean.
+        type: integer
+      content:
+        description: Content is the full body text when the source content is available.
+        type: string
+      content_type:
+        description: Kind is the content type, for example news, blog, post, generated,
+          or comment.
+        type: string
+      entities:
+        description: Entities lists named entities such as people, places, organizations,
+          or products.
+        items:
+          type: string
+        type: array
+      image_url:
+        description: ImageUrl is the featured image or preview image associated with
+          the content.
+        type: string
+      likes:
+        description: Likes is the aggregate number of likes or upvotes associated
+          with this Bean.
+        type: integer
+      published_at:
+        description: Created is the original publish timestamp of the article or post.
+        format: date-time
+        type: string
+      regions:
+        description: Regions lists geographic regions mentioned in or associated with
+          the content.
+        items:
+          type: string
+        type: array
+      related:
+        description: Related lists URLs of semantically or editorially related Beans.
+        type: integer
+      sentiments:
+        description: Sentiments lists inferred tones or sentiments expressed in the
+          content.
+        items:
+          type: string
+        type: array
+      shares:
+        description: Shares is the aggregate number of reposts or share-like actions
+          associated with this Bean.
+        type: integer
+      source:
+        description: Source is the canonical publisher identifier and matches Publisher.Source.
+        type: string
+      subscribers:
+        description: Subscribers is the aggregate audience size associated with this
+          Bean's chatter.
+        type: integer
+      summary:
+        description: Summary is a short abstract or teaser used in listings and previews.
+        type: string
+      tags:
+        description: Computed tags merged from categories/regions/entities for display
+        items:
+          type: string
+        type: array
+      title:
+        description: Title is the human-readable headline or title of the content.
+        type: string
+      trend_score:
+        description: TrendScore is the computed ranking score used to order trending
+          results.
+        type: number
+      url:
+        description: URL is the canonical URL of the article or post.
+        type: string
+    type: object
+  beansack.PropagationCoverage:
+    properties:
+      created:
+        format: date-time
+        type: string
+      site_name:
+        type: string
+      source:
+        type: string
+      url:
+        type: string
+    type: object
+  beansack.PropagationMention:
+    properties:
+      comments:
+        type: integer
+      forum:
+        type: string
+      likes:
+        type: integer
+      observed:
+        format: date-time
+        type: string
+      share_url:
+        type: string
+      source:
+        type: string
+    type: object
+  beansack.PropagationResult:
+    properties:
+      coverage:
+        items:
+          $ref: '#/definitions/beansack.PropagationCoverage'
+        type: array
+      mentions:
+        items:
+          $ref: '#/definitions/beansack.PropagationMention'
+        type: array
+      url:
+        type: string
+    type: object
   beansack.Publisher:
     description: Publisher contains identifying and descriptive information about
       a publisher
@@ -132,18 +315,18 @@ definitions:
         description: SiteName is the human-readable display name of the publisher.
         type: string
     type: object
+  router.PropagationInput:
+    properties:
+      urls:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - urls
+    type: object
 info:
-  contact:
-    email: soumitsrah@cafecito.tech
-    name: Project Cafecito
-    url: http://cafecito.tech
-  description: Beans is an intelligent news & blogs aggregation and search service
-    that curates fresh content from RSS feeds using AI-powered natural language queries
-    and filters.
-  license:
-    name: MIT
-  title: Beans News API & MCP
-  version: "0.1"
+  contact: {}
 paths:
   /articles/latest:
     get:
@@ -222,6 +405,7 @@ paths:
         type: integer
       - description: pagination offset
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -231,7 +415,7 @@ paths:
           description: array of latest articles sorted by publish date
           schema:
             items:
-              $ref: '#/definitions/beansack.BeanAggregate'
+              $ref: '#/definitions/beansack.Bean'
             type: array
         "204":
           description: no data available
@@ -260,6 +444,121 @@ paths:
               type: string
             type: object
       summary: Get latest articles (reverse chronological)
+      tags:
+      - Articles
+  /articles/propagation:
+    get:
+      consumes:
+      - application/json
+      description: For each article URL, returns publisher coverage (from related_beans)
+        and social mentions (from chatters).
+      parameters:
+      - collectionFormat: csv
+        description: Article URLs (CSV, GET only, max 128)
+        in: query
+        items:
+          type: string
+        name: urls
+        required: true
+        type: array
+      - description: JSON body with urls array (POST only, max 128 items)
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/router.PropagationInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/beansack.PropagationResult'
+            type: array
+        "400":
+          description: missing urls, too many urls (>128), invalid URL, or binding
+            error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get article propagation
+      tags:
+      - Articles
+    post:
+      consumes:
+      - application/json
+      description: For each article URL, returns publisher coverage (from related_beans)
+        and social mentions (from chatters).
+      parameters:
+      - collectionFormat: csv
+        description: Article URLs (CSV, GET only, max 128)
+        in: query
+        items:
+          type: string
+        name: urls
+        required: true
+        type: array
+      - description: JSON body with urls array (POST only, max 128 items)
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/router.PropagationInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/beansack.PropagationResult'
+            type: array
+        "400":
+          description: missing urls, too many urls (>128), invalid URL, or binding
+            error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get article propagation
       tags:
       - Articles
   /articles/search:
@@ -348,6 +647,7 @@ paths:
         type: integer
       - description: pagination offset (number of items to skip)
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -461,6 +761,7 @@ paths:
         type: integer
       - description: pagination offset
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -470,7 +771,7 @@ paths:
           description: array of top headlines from last 24h, sorted by trend_score
           schema:
             items:
-              $ref: '#/definitions/beansack.BeanAggregate'
+              $ref: '#/definitions/beansack.BeanTrend'
             type: array
         "204":
           description: no data available
@@ -578,6 +879,7 @@ paths:
         type: integer
       - description: pagination offset
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -587,7 +889,7 @@ paths:
           description: array of trending articles sorted by trend_score (descending)
           schema:
             items:
-              $ref: '#/definitions/beansack.BeanAggregate'
+              $ref: '#/definitions/beansack.BeanTrend'
             type: array
         "204":
           description: no data available
@@ -633,7 +935,7 @@ paths:
       summary: Health check
       tags:
       - Health
-  /publishers:
+  /sources:
     get:
       description: Retrieves detailed metadata for one or more sources including site
         name, description, favicon.
@@ -655,6 +957,7 @@ paths:
         type: integer
       - description: pagination offset (number of items to skip)
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -669,7 +972,7 @@ paths:
         "204":
           description: no data available
         "400":
-          description: 'bad request: missing or invalid sources parameter'
+          description: invalid pagination parameters or missing/invalid sources
           schema:
             additionalProperties:
               type: string
@@ -709,6 +1012,7 @@ paths:
         type: integer
       - description: pagination offset (number of items to skip)
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -722,6 +1026,12 @@ paths:
             type: array
         "204":
           description: no data available
+        "400":
+          description: invalid pagination parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
           schema:
@@ -757,6 +1067,7 @@ paths:
         type: integer
       - description: pagination offset (number of items to skip)
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -770,6 +1081,12 @@ paths:
             type: array
         "204":
           description: no data available
+        "400":
+          description: invalid pagination parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
           schema:
@@ -805,6 +1122,7 @@ paths:
         type: integer
       - description: pagination offset (number of items to skip)
         in: query
+        minimum: 0
         name: offset
         type: integer
       produces:
@@ -818,6 +1136,12 @@ paths:
             type: array
         "204":
           description: no data available
+        "400":
+          description: invalid pagination parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: 'unauthorized: missing or invalid API key'
           schema:
@@ -839,6 +1163,4 @@ paths:
       summary: List geographic regions
       tags:
       - Tags
-schemes:
-- https
 swagger: "2.0"

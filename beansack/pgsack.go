@@ -98,6 +98,100 @@ func (p *PGSack) QueryChatters(ctx context.Context, conditions Condition, page P
 	return datautils.Transform(items, func(item *dataRow) Chatter { return item.toChatter() }), nil
 }
 
+const _SQL_PROPAGATION_RELATED = `
+SELECT
+    rb.url AS seed_url,
+    b.url,
+    b.created,
+    b.source,
+    p.site_name
+FROM related_beans rb
+INNER JOIN beans b ON b.url = rb.related_url
+LEFT JOIN publishers p ON p.source = b.source
+WHERE rb.url = ANY(@urls)
+ORDER BY rb.url, b.created DESC`
+
+const _SQL_PROPAGATION_SHARES = `
+SELECT
+    c.url AS seed_url,
+    c.chatter_url,
+    c.source,
+    c.forum,
+    c.collected,
+    c.comments,
+    c.likes
+FROM chatters c
+WHERE c.url = ANY(@urls)
+ORDER BY c.url, c.collected DESC`
+
+type propagationRelatedRow struct {
+	SeedURL  string         `db:"seed_url"`
+	URL      string         `db:"url"`
+	Created  sql.NullTime   `db:"created"`
+	Source   string         `db:"source"`
+	SiteName sql.NullString `db:"site_name"`
+}
+
+type propagationShareRow struct {
+	SeedURL    string         `db:"seed_url"`
+	ChatterURL string         `db:"chatter_url"`
+	Source     string         `db:"source"`
+	Forum      sql.NullString `db:"forum"`
+	Collected  sql.NullTime   `db:"collected"`
+	Comments   sql.NullInt64  `db:"comments"`
+	Likes      sql.NullInt64  `db:"likes"`
+}
+
+func (p *PGSack) QueryPropagation(ctx context.Context, urls []string) ([]PropagationResult, error) {
+	args := pgx.NamedArgs{"urls": urls}
+
+	relatedRows, err := fetchAll[propagationRelatedRow](ctx, p.db, _SQL_PROPAGATION_RELATED, args)
+	if err != nil {
+		return nil, err
+	}
+
+	shareRows, err := fetchAll[propagationShareRow](ctx, p.db, _SQL_PROPAGATION_SHARES, args)
+	if err != nil {
+		return nil, err
+	}
+
+	coverageByURL := map[string][]PropagationCoverage{}
+	for _, r := range relatedRows {
+		coverageByURL[r.SeedURL] = append(coverageByURL[r.SeedURL], PropagationCoverage{
+			URL:      r.URL,
+			Created:  r.Created.Time,
+			Source:   r.Source,
+			SiteName: r.SiteName.String,
+		})
+	}
+
+	mentionsByURL := map[string][]PropagationMention{}
+	for _, s := range shareRows {
+		mentionsByURL[s.SeedURL] = append(mentionsByURL[s.SeedURL], PropagationMention{
+			ShareURL: s.ChatterURL,
+			Source:   s.Source,
+			Forum:    s.Forum.String,
+			Observed: s.Collected.Time,
+			Comments: s.Comments.Int64,
+			Likes:    s.Likes.Int64,
+		})
+	}
+
+	results := make([]PropagationResult, 0, len(urls))
+	for _, url := range urls {
+		cov := coverageByURL[url]
+		men := mentionsByURL[url]
+		if cov == nil {
+			cov = []PropagationCoverage{}
+		}
+		if men == nil {
+			men = []PropagationMention{}
+		}
+		results = append(results, PropagationResult{URL: url, Coverage: cov, Mentions: men})
+	}
+	return results, nil
+}
+
 func (p *PGSack) DistinctCategories(ctx context.Context, page Pagination) ([]string, error) {
 	// SELECT DISTINCT unnest(categories) AS category FROM beans WHERE categories IS NOT NULL ORDER BY category
 	query, args := p.buildSQL(BEANS, Condition{Extra: []string{"categories IS NOT NULL"}}, []string{"category"}, page, []string{"DISTINCT unnest(categories) AS category"})
@@ -340,38 +434,39 @@ func fetchAllScalar[T any](ctx context.Context, db *pgxpool.Pool, query string, 
 // PGX marshalling and unmarshalling for custom types
 
 type dataRow struct {
-	URL         sql.NullString  `db:"url"`
-	Kind        sql.NullString  `db:"kind"`
-	Title       sql.NullString  `db:"title"`
-	Summary     sql.NullString  `db:"summary"`
-	Content     sql.NullString  `db:"content"`
-	Author      sql.NullString  `db:"author"`
-	Source      sql.NullString  `db:"source"`
-	ImageUrl    sql.NullString  `db:"image_url"`
-	Created     sql.NullTime    `db:"created"`
-	Embedding   pgvector.Vector `db:"embedding"`
-	Gist        sql.NullString  `db:"gist"`
-	Categories  []string        `db:"categories"`
-	Sentiments  []string        `db:"sentiments"`
-	Regions     []string        `db:"regions"`
-	Entities    []string        `db:"entities"`
-	Related     sql.NullInt64   `db:"related"`
-	ClusterSize sql.NullInt64   `db:"cluster_size"`
-	Updated     sql.NullTime    `db:"updated"`
-	Likes       sql.NullInt64   `db:"likes"`
-	Comments    sql.NullInt64   `db:"comments"`
-	Subscribers sql.NullInt64   `db:"subscribers"`
-	Shares      sql.NullInt64   `db:"shares"`
-	Distance    float64         `db:"distance"`
-	TrendScore  float64         `db:"trend_score"`
-	ChatterURL  sql.NullString  `db:"chatter_url"`
-	Forum       sql.NullString  `db:"forum"`
-	Collected   sql.NullTime    `db:"collected"`
-	BaseURL     sql.NullString  `db:"base_url"`
-	SiteName    sql.NullString  `db:"site_name"`
-	Description sql.NullString  `db:"description"`
-	Favicon     sql.NullString  `db:"favicon"`
-	RSSFeed     sql.NullString  `db:"rss_feed"`
+	URL               sql.NullString  `db:"url"`
+	Kind              sql.NullString  `db:"kind"`
+	Title             sql.NullString  `db:"title"`
+	Summary           sql.NullString  `db:"summary"`
+	Content           sql.NullString  `db:"content"`
+	RestrictedContent sql.NullBool    `db:"restricted_content"`
+	Author            sql.NullString  `db:"author"`
+	Source            sql.NullString  `db:"source"`
+	ImageUrl          sql.NullString  `db:"image_url"`
+	Created           sql.NullTime    `db:"created"`
+	Embedding         pgvector.Vector `db:"embedding"`
+	Categories        []string        `db:"categories"`
+	Sentiments        []string        `db:"sentiments"`
+	Regions           []string        `db:"regions"`
+	Entities          []string        `db:"entities"`
+	Tags              []byte          `db:"tags"`
+	Related           sql.NullInt64   `db:"related"`
+	ClusterSize       sql.NullInt64   `db:"cluster_size"`
+	Updated           sql.NullTime    `db:"updated"`
+	Likes             sql.NullInt64   `db:"likes"`
+	Comments          sql.NullInt64   `db:"comments"`
+	Subscribers       sql.NullInt64   `db:"subscribers"`
+	Shares            sql.NullInt64   `db:"shares"`
+	Distance          float64         `db:"distance"`
+	TrendScore        float64         `db:"trend_score"`
+	ChatterURL        sql.NullString  `db:"chatter_url"`
+	Forum             sql.NullString  `db:"forum"`
+	Collected         sql.NullTime    `db:"collected"`
+	BaseURL           sql.NullString  `db:"base_url"`
+	SiteName          sql.NullString  `db:"site_name"`
+	Description       sql.NullString  `db:"description"`
+	Favicon           sql.NullString  `db:"favicon"`
+	RSSFeed           sql.NullString  `db:"rss_feed"`
 }
 
 // Conversion methods from dataRow to public types
@@ -387,7 +482,6 @@ func (r *dataRow) toBean() Bean {
 		ImageUrl:   r.ImageUrl.String,
 		Created:    r.Created.Time,
 		Embedding:  r.Embedding.Slice(),
-		Gist:       r.Gist.String,
 		Categories: r.Categories,
 		Sentiments: r.Sentiments,
 		Regions:    r.Regions,

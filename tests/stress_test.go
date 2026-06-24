@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,21 +32,18 @@ const (
 // stressEndpoint describes one API endpoint with the set of optional query
 // parameters it accepts.
 type stressEndpoint struct {
-	path        string
-	acceptsQ    bool
-	acceptsTags bool
-	// published_since / trending_since are only meaningful on article endpoints
-	acceptsPublishedSince bool
-	acceptsTrendingSince  bool
-	// /publishers requires at least one source value
+	path           string
+	acceptsQ       bool
+	acceptsTags    bool
+	acceptsFrom    bool
 	requiresSources bool
 }
 
 var stressEndpoints = []stressEndpoint{
-	{path: "/articles/latest", acceptsQ: true, acceptsTags: true, acceptsPublishedSince: true, acceptsTrendingSince: true},
-	{path: "/articles/trending", acceptsQ: true, acceptsTags: true, acceptsPublishedSince: true, acceptsTrendingSince: true},
-	{path: "/publishers/sources"},
-	{path: "/publishers", requiresSources: true},
+	{path: "/articles/latest", acceptsQ: true, acceptsTags: true, acceptsFrom: true},
+	{path: "/articles/trending", acceptsQ: true, acceptsTags: true, acceptsFrom: true},
+	{path: "/tags/categories"},
+	{path: "/sources", requiresSources: true},
 	{path: "/tags/entities"},
 	{path: "/tags/regions"},
 }
@@ -131,7 +129,7 @@ var sampleTags = []string{
 }
 
 // sampleSources is a small set of representative publisher source IDs used to
-// satisfy the /publishers endpoint's required "sources" parameter.
+// satisfy the /sources endpoint's sources query parameter.
 var sampleSources = []string{
 	"techcrunch",
 	"theverge",
@@ -186,17 +184,9 @@ func buildStressURL(baseURL string, ep stressEndpoint, rng *rand.Rand) string {
 		}
 	}
 
-	if ep.acceptsPublishedSince && rng.Intn(2) == 0 {
-		// Random offset from 1 to 30 days in the past.
+	if ep.acceptsFrom && rng.Intn(2) == 0 {
 		daysAgo := 1 + rng.Intn(30)
-		t := time.Now().UTC().AddDate(0, 0, -daysAgo)
-		params.Set("published_since", t.Format(time.RFC3339))
-	}
-
-	if ep.acceptsTrendingSince && rng.Intn(2) == 0 {
-		daysAgo := 1 + rng.Intn(7)
-		t := time.Now().UTC().AddDate(0, 0, -daysAgo)
-		params.Set("trending_since", t.Format(time.RFC3339))
+		params.Set("from", time.Now().UTC().AddDate(0, 0, -daysAgo).Format("2006-01-02"))
 	}
 
 	// Random limit (1–50) and occasionally a non-zero offset.
@@ -205,7 +195,7 @@ func buildStressURL(baseURL string, ep stressEndpoint, rng *rand.Rand) string {
 		params.Set("offset", strconv.Itoa(rng.Intn(20)))
 	}
 
-	raw := baseURL + ep.path
+	raw := strings.TrimSuffix(baseURL, "/") + ep.path
 	if enc := params.Encode(); enc != "" {
 		raw += "?" + enc
 	}

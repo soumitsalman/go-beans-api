@@ -1,5 +1,5 @@
 // @title 			Beans News API & MCP
-// @version 		0.1
+// @version 		0.8
 // @description 	Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.
 // @schemes 		https
 // @license.name 	MIT
@@ -9,6 +9,7 @@
 package router
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -50,9 +51,28 @@ const (
 	_BEAN_TREND_FIELDS = "likes, comments, shares, related, trend_score"
 )
 
+// PaginationInput holds shared list-endpoint pagination query params.
+// form default=16 and max=128 must stay in sync with DEFAULT_LIMIT and MAX_LIMIT.
 type PaginationInput struct {
 	Limit  int `form:"limit,default=16" binding:"min=1,max=128"`
 	Offset int `form:"offset" binding:"min=0"`
+}
+
+func (p PaginationInput) ToDB() bs.Pagination {
+	return bs.Pagination{Limit: p.Limit, Offset: p.Offset}
+}
+
+func normalizePagination(p *PaginationInput) error {
+	if p.Limit == 0 {
+		p.Limit = DEFAULT_LIMIT
+	}
+	if p.Limit > MAX_LIMIT {
+		return fmt.Errorf("limit must be <= %d", MAX_LIMIT)
+	}
+	if p.Offset < 0 {
+		return fmt.Errorf("offset must be >= 0")
+	}
+	return nil
 }
 
 // PaginationInput describes common pagination query params
@@ -99,6 +119,30 @@ type ArticlesInput struct {
 	PaginationInput
 }
 
+type PropagationInput struct {
+	URLs []string `form:"urls" json:"urls" collection_format:"csv" binding:"required,min=1,dive,url"`
+}
+
+func bindPropagationInput(c *gin.Context) (PropagationInput, error) {
+	var input PropagationInput
+	switch c.Request.Method {
+	case http.MethodGet:
+		if err := c.ShouldBindQuery(&input); err != nil {
+			return PropagationInput{}, err
+		}
+	case http.MethodPost:
+		if err := c.ShouldBindJSON(&input); err != nil {
+			return PropagationInput{}, err
+		}
+	default:
+		return PropagationInput{}, fmt.Errorf("method not allowed")
+	}
+	if len(input.URLs) > MAX_LIMIT {
+		return PropagationInput{}, fmt.Errorf("urls must contain at most %d items", MAX_LIMIT)
+	}
+	return input, nil
+}
+
 type Configuration struct {
 	DB       bs.Beansack
 	Embedder nlp.Embedder
@@ -125,8 +169,12 @@ func validateTagsParams(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := normalizePagination(&input.PaginationInput); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	c.Set("req_params", input)
-	c.Set("req_page", bs.Pagination{Limit: input.Limit, Offset: input.Offset})
+	c.Set("req_page", input.PaginationInput.ToDB())
 	c.Next()
 }
 
@@ -137,9 +185,10 @@ func validateTagsParams(c *gin.Context) {
 // @Tags Tags
 // @Produce json
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)"
+// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
 // @Success 200 {array} string "list of category strings"
 // @Success 204 "no data available"
+// @Failure 400 {object} map[string]string "invalid pagination parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
 // @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
@@ -157,9 +206,10 @@ func (r *Configuration) getCategories(c *gin.Context) {
 // @Tags Tags
 // @Produce json
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)"
+// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
 // @Success 200 {array} string "list of entity strings"
 // @Success 204 "no data available"
+// @Failure 400 {object} map[string]string "invalid pagination parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
 // @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
@@ -177,9 +227,10 @@ func (r *Configuration) getEntities(c *gin.Context) {
 // @Tags Tags
 // @Produce json
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)"
+// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
 // @Success 200 {array} string "list of region strings"
 // @Success 204 "no data available"
+// @Failure 400 {object} map[string]string "invalid pagination parameters"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
 // @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
@@ -196,30 +247,15 @@ func validatePublishersParams(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := normalizePagination(&input.PaginationInput); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	c.Set("req_params", input)
 	c.Set("req_conditions", bs.Condition{Sources: input.Sources})
-	c.Set("req_page", bs.Pagination{Limit: input.Limit, Offset: input.Offset})
+	c.Set("req_page", input.PaginationInput.ToDB())
 	c.Next()
 }
-
-// NOTE: removing this for now. its getting confusing
-// // getSources godoc
-// // @Summary List available sources
-// // @Description Retrieves a paginated list of unique publisher source IDs and identifiers.
-// // Use these source IDs with other endpoints to filter content by specific publishers.
-// // @Tags Publishers
-// // @Produce json
-// // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// // @Param offset query int false "pagination offset (number of items to skip)"
-// // @Success 200 {array} string "list of source/publisher ID strings"
-// // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// // @Failure 500 {object} map[string]string "database error"
-// // @Router /publishers/sources [get]
-// func (r *Configuration) getSources(c *gin.Context) {
-// 	page := c.MustGet("req_page").(bs.Pagination)
-// 	items, err := r.DB.DistinctSources(c.Request.Context(), page)
-// 	returnResponse(c, items, err)
-// }
 
 // getPublishers godoc
 // @Summary Query source metadata
@@ -228,14 +264,14 @@ func validatePublishersParams(c *gin.Context) {
 // @Produce json
 // @Param sources query []string true "source IDs to fetch metadata for (comma-separated CSV)" collectionFormat(csv)
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)"
+// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
 // @Success 200 {array} beansack.Publisher "array of publisher metadata objects"
 // @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "bad request: missing or invalid sources parameter"
+// @Failure 400 {object} map[string]string "invalid pagination parameters or missing/invalid sources"
 // @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
 // @Failure 429 {object} map[string]string "rate limit exceeded"
 // @Failure 500 {object} map[string]string "database error"
-// @Router /publishers [get]
+// @Router /sources [get]
 func (r *Configuration) getPublishers(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
 	page := c.MustGet("req_page").(bs.Pagination)
@@ -246,6 +282,10 @@ func (r *Configuration) getPublishers(c *gin.Context) {
 func (config *Configuration) validateArticlesParams(c *gin.Context) {
 	var input ArticlesInput
 	if err := c.ShouldBindQuery(&input); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := normalizePagination(&input.PaginationInput); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -283,7 +323,7 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 	}
 	c.Set("req_params", input)
 	c.Set("req_conditions", conditions)
-	c.Set("req_page", bs.Pagination{Limit: input.Limit, Offset: input.Offset})
+	c.Set("req_page", input.PaginationInput.ToDB())
 	c.Set("req_columns", columns)
 	c.Next()
 }
@@ -311,7 +351,7 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 // @Param from query string false "published/updated since date (ISO 8601 date format YYYY-MM-DD)" format(date)
 // @Param full_content query bool false "if true, include full article content (large payload)" default(false)
 // @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)"
+// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
 // @Success 200 {array} beansack.BeanAggregate "array of article aggregates with engagement metrics"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: missing required search parameters or invalid input"
@@ -367,7 +407,7 @@ func (r *Configuration) searchArticles(c *gin.Context) {
 // @Param from query string false "published since date (YYYY-MM-DD, defaults to 7 days ago if omitted)" format(date)
 // @Param full_content query bool false "include full article content" default(false)
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset"
+// @Param offset query int false "pagination offset" minimum(0)
 // @Success 200 {array} beansack.Bean "array of latest articles sorted by publish date"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
@@ -413,7 +453,7 @@ func (r *Configuration) getLatestArticles(c *gin.Context) {
 // @Param from query string false "trending since date (YYYY-MM-DD, defaults to 7 days ago)" format(date)
 // @Param full_content query bool false "include full article content" default(false)
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset"
+// @Param offset query int false "pagination offset" minimum(0)
 // @Success 200 {array} beansack.BeanTrend "array of trending articles sorted by trend_score (descending)"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
@@ -455,7 +495,7 @@ func (r *Configuration) getTrendingArticles(c *gin.Context) {
 // @Param sources query []string false "publisher source filters (inclusive OR)" collectionFormat(csv)
 // @Param full_content query bool false "include full article content" default(false)
 // @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset"
+// @Param offset query int false "pagination offset" minimum(0)
 // @Success 200 {array} beansack.BeanTrend "array of top headlines from last 24h, sorted by trend_score"
 // @Success 204 "no data available"
 // @Failure 400 {object} map[string]string "bad request: invalid parameters"
@@ -471,6 +511,35 @@ func (r *Configuration) getTopHeadlinesArticles(c *gin.Context) {
 	conditions.Updated = time.Now().AddDate(0, 0, -MIN_WINDOW)
 	items, err := r.DB.QueryTrendingBeans(c.Request.Context(), conditions, page, append(columns, _BEAN_TREND_FIELDS))
 	returnResponse(c, items, err)
+}
+
+// getArticlePropagation godoc
+// @Summary Get article propagation
+// @Description For each article URL, returns publisher coverage (from related_beans) and social mentions (from chatters).
+// @Tags Articles
+// @Accept json
+// @Produce json
+// @Param urls query []string true "Article URLs (CSV, GET only, max 128)" collectionFormat(csv)
+// @Param input body PropagationInput true "JSON body with urls array (POST only, max 128 items)"
+// @Success 200 {array} beansack.PropagationResult
+// @Failure 400 {object} map[string]string "missing urls, too many urls (>128), invalid URL, or binding error"
+// @Failure 401 {object} map[string]string
+// @Failure 429 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /articles/propagation [get]
+// @Router /articles/propagation [post]
+func (r *Configuration) getArticlePropagation(c *gin.Context) {
+	input, err := bindPropagationInput(c)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	items, err := r.DB.QueryPropagation(c.Request.Context(), input.URLs)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": _DB_ERROR})
+		return
+	}
+	c.JSON(http.StatusOK, items)
 }
 
 func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string, max_concurrent_requests int) *gin.Engine {
@@ -498,7 +567,7 @@ func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string
 		// cors
 		cors.New(cors.Config{
 			AllowAllOrigins:  true,
-			AllowMethods:     []string{"GET", "OPTIONS"},
+			AllowMethods:     []string{"GET", "POST", "OPTIONS"},
 			AllowHeaders:     []string{"*"},
 			AllowCredentials: false,
 			MaxAge:           24 * time.Hour,
@@ -535,6 +604,8 @@ func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string
 		articles.GET("/trending", config.getTrendingArticles)
 		articles.GET("/top-headlines", config.getTopHeadlinesArticles)
 	}
+	protected.GET("/articles/propagation", config.getArticlePropagation)
+	protected.POST("/articles/propagation", config.getArticlePropagation)
 	return router
 }
 
