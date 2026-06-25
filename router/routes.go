@@ -1,11 +1,3 @@
-// @title 			Beans News API & MCP
-// @version 		0.8
-// @description 	Beans is an intelligent news & blogs aggregation and search service that curates fresh content from RSS feeds using AI-powered natural language queries and filters.
-// @schemes 		https
-// @license.name 	MIT
-// @contact.name 	Project Cafecito
-// @contact.url  	http://cafecito.tech
-// @contact.email 	soumitsrah@cafecito.tech
 package router
 
 import (
@@ -75,22 +67,19 @@ func normalizePagination(p *PaginationInput) error {
 	return nil
 }
 
-// PaginationInput describes common pagination query params
-// Description: Common pagination parameters used by list endpoints.
+// TagsInput describes pagination for tag discovery endpoints (/tags/*).
 type TagsInput struct {
 	PaginationInput
 }
 
-// Description: Query for tag-like resources (categories, entities, regions).
+// PublishersInput describes query parameters for getPublishers (/sources).
 type PublishersInput struct {
-	// Sources: Publisher/source IDs to include (CSV).
+	// Sources: Publisher source IDs to resolve (CSV). Required for meaningful results.
 	Sources []string `form:"sources" collection_format:"csv"`
 	PaginationInput
 }
 
-// PublishersInput describes parameters for publisher queries
-// Description: Query parameters used to filter publishers by source(s).
-// ArticlesInput contains query parameters for article list/search endpoints.
+// ArticlesInput describes shared query parameters for article list and search endpoints.
 type ArticlesInput struct {
 	// URLs: Optional list of article URLs to fetch directly (CSV).
 	URLs []string `form:"urls" collection_format:"csv"`
@@ -120,6 +109,7 @@ type ArticlesInput struct {
 }
 
 type PropagationInput struct {
+	// URLs lists seed article URLs to analyze for cross-outlet coverage and social mentions (1–128 items).
 	URLs []string `form:"urls" json:"urls" collection_format:"csv" binding:"required,min=1,dive,url"`
 }
 
@@ -151,18 +141,18 @@ type Configuration struct {
 	cache    *otter.Cache[string, []float32]
 }
 
-// health
+// health godoc
+// @Summary Check API health
+// @Description Lightweight liveness probe. Use before other tools to confirm the service is reachable. No authentication required when API keys are disabled.
+// @Tags Health
+// @Produce json
+// @Success 200 {object} map[string]string "status alive"
+// @ID healthCheck
+// @Router /health [get]
 func (r *Configuration) health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "alive"})
 }
 
-// health godoc
-// @Summary Health check
-// @Description Returns service health status
-// @Tags Health
-// @Produce json
-// @Success 200 {object} map[string]string
-// @Router /health [get]
 func validateTagsParams(c *gin.Context) {
 	var input TagsInput
 	if err := c.ShouldBindQuery(&input); err != nil {
@@ -179,19 +169,23 @@ func validateTagsParams(c *gin.Context) {
 }
 
 // getCategories godoc
-// @Summary List article categories
-// @Description Retrieves a paginated list of unique article categories/topics discovered in the database.
-// Examples: Artificial Intelligence, Cybersecurity, Politics, Software Engineering, Business, Healthcare, Technology, etc.
+// @Summary List article category topics
+// @Description Discover valid values for the `categories` filter on article endpoints.
+// @Description Returns a paginated array of unique topic labels extracted from indexed articles (e.g. "Artificial Intelligence", "Cybersecurity", "Politics").
+// @Description **When to use**: call before searchArticles or feed endpoints when you need exact, case-sensitive category strings.
+// @Description **Related tools**: listEntities, listRegions, searchArticles.
+// @Description **Pagination**: use `offset` to walk the full catalog when `limit` < total count.
 // @Tags Tags
 // @Produce json
-// @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
-// @Success 200 {array} string "list of category strings"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "invalid pagination parameters"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database error"
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Number of items to skip. Default 0." minimum(0)
+// @Success 200 {array} string "JSON array of category label strings"
+// @Success 204 "No categories in index (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Invalid limit or offset"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database unavailable; retry"
+// @ID listCategories
 // @Router /tags/categories [get]
 func (r *Configuration) getCategories(c *gin.Context) {
 	page := c.MustGet("req_page").(bs.Pagination)
@@ -201,18 +195,21 @@ func (r *Configuration) getCategories(c *gin.Context) {
 
 // getEntities godoc
 // @Summary List named entities
-// @Description Retrieves a paginated list of unique named entities (persons, organizations, products, places) extracted from articles.
-// Entities are discovered using NLP and represent key concepts mentioned across content.
+// @Description Discover valid values for the `entities` filter on article endpoints.
+// @Description Returns a paginated array of unique named entities (people, organizations, products, places) extracted via NLP from article text.
+// @Description **When to use**: call before searchArticles when filtering by specific people, companies, or places with exact spelling.
+// @Description **Related tools**: listCategories, listRegions, searchArticles.
 // @Tags Tags
 // @Produce json
-// @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
-// @Success 200 {array} string "list of entity strings"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "invalid pagination parameters"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database error"
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Number of items to skip. Default 0." minimum(0)
+// @Success 200 {array} string "JSON array of entity label strings"
+// @Success 204 "No entities in index (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Invalid limit or offset"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database unavailable; retry"
+// @ID listEntities
 // @Router /tags/entities [get]
 func (r *Configuration) getEntities(c *gin.Context) {
 	page := c.MustGet("req_page").(bs.Pagination)
@@ -222,18 +219,21 @@ func (r *Configuration) getEntities(c *gin.Context) {
 
 // getRegions godoc
 // @Summary List geographic regions
-// @Description Retrieves a paginated list of unique geographic regions mentioned in articles.
-// Examples: North America, Europe, Asia, UK, US, France, India, Australia, Middle East, etc.
+// @Description Discover valid values for the `regions` filter on article endpoints.
+// @Description Returns a paginated array of unique geographic region labels (e.g. "North America", "Europe", "India", "Middle East").
+// @Description **When to use**: call before searchArticles when filtering by geography with exact, case-sensitive region strings.
+// @Description **Related tools**: listCategories, listEntities, searchArticles.
 // @Tags Tags
 // @Produce json
-// @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
-// @Success 200 {array} string "list of region strings"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "invalid pagination parameters"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database error"
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Number of items to skip. Default 0." minimum(0)
+// @Success 200 {array} string "JSON array of region label strings"
+// @Success 204 "No regions in index (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Invalid limit or offset"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database unavailable; retry"
+// @ID listRegions
 // @Router /tags/regions [get]
 func (r *Configuration) getRegions(c *gin.Context) {
 	page := c.MustGet("req_page").(bs.Pagination)
@@ -258,19 +258,24 @@ func validatePublishersParams(c *gin.Context) {
 }
 
 // getPublishers godoc
-// @Summary Query source metadata
-// @Description Retrieves detailed metadata for one or more sources including site name, description, favicon.
+// @Summary Resolve publisher source metadata
+// @Description Look up display metadata for one or more publisher source IDs found on article `source` fields.
+// @Description Returns site name, base URL, description, and favicon for each requested source ID.
+// @Description **When to use**: after searchArticles or feed endpoints to humanize source IDs in UI or agent responses.
+// @Description **Required**: at least one value in `sources` (comma-separated source IDs, e.g. techcrunch.com).
+// @Description **Related tools**: searchArticles, getLatestArticles.
 // @Tags Publishers
 // @Produce json
-// @Param sources query []string true "source IDs to fetch metadata for (comma-separated CSV)" collectionFormat(csv)
-// @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
-// @Success 200 {array} beansack.Publisher "array of publisher metadata objects"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "invalid pagination parameters or missing/invalid sources"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database error"
+// @Param sources query []string true "Publisher source IDs to resolve (CSV). Example: techcrunch.com,theverge.com" collectionFormat(csv)
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Number of items to skip. Default 0." minimum(0)
+// @Success 200 {array} beansack.Publisher "Publisher metadata objects keyed by source ID"
+// @Success 204 "No matching publishers (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Missing sources or invalid pagination"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database unavailable; retry"
+// @ID getPublishers
 // @Router /sources [get]
 func (r *Configuration) getPublishers(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
@@ -329,38 +334,40 @@ func (config *Configuration) validateArticlesParams(c *gin.Context) {
 }
 
 // searchArticles godoc
-// @Summary Search articles
-// @Description Perform semantic (vector embedding) or tag-based search across all articles in the database.
-// Results return full article details with publisher info, engagement metrics, and computed trends.
-// At least ONE of: `q`, `tags`, `categories`, `regions`, `entities`, or `urls` is required.
-// Note: This is a heavy query; results sorted by relevance. Full content significantly increases payload size.
-// For filtering: `tags` provides case/whitespace-insensitive text search across categories, regions, and entities (recommended starting point).
-// For precision filtering, use `categories`, `regions`, `entities` (case/whitespace-sensitive). Get exhaustive tag lists from /tags/* endpoints.
+// @Summary Search all articles by topic, tags, or URL
+// @Description **Primary MCP tool** — full-corpus search sorted by relevance.
+// @Description **Requires at least one of**: `q`, `tags`, `categories`, `regions`, `entities`, or `urls`.
+// @Description **Search modes** (combinable with filters):
+// @Description - `q` + `acc`: semantic vector search over article embeddings (natural language, 3–512 chars).
+// @Description - `tags`: fuzzy text match across categories, regions, and entities (AND between tag values; case/whitespace insensitive).
+// @Description - `categories` / `regions` / `entities`: exact array filters (OR within each dimension; case/whitespace sensitive — discover values via listCategories, listEntities, listRegions).
+// @Description - `urls`: fetch specific articles by canonical URL (CSV).
+// @Description **Performance**: scans the full index; prefer `full_content=false` unless the body is needed. Heavier than feed endpoints.
+// @Description **Related tools**: listCategories, listEntities, listRegions, getPublishers, getArticlePropagation.
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param q query string false "semantic vector search query (character length 3-512, natural language)"
-// @Param acc query number false "embedding accuracy/similarity threshold (0.0-1.0, higher = stricter match)" default(0.75) minimum(0) maximum(1)
-// @Param content_type query string false "content type filter (news, blog, post, generated, comment, etc.)"
-// @Param urls query []string false "specific article URLs to fetch directly (CSV)" collectionFormat(csv)
-// @Param tags query []string false "case/whitespace-insensitive text search across categories, regions, entities (AND combination, recommended)" collectionFormat(csv)
-// @Param categories query []string false "precise category topic filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param regions query []string false "precise geographic region filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param entities query []string false "precise named entity filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param sources query []string false "publisher/source ID filters (inclusive OR)" collectionFormat(csv)
-// @Param from query string false "published/updated since date (ISO 8601 date format YYYY-MM-DD)" format(date)
-// @Param full_content query bool false "if true, include full article content (large payload)" default(false)
-// @Param limit query int false "page limit (items per page)" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset (number of items to skip)" minimum(0)
-// @Success 200 {array} beansack.BeanAggregate "array of article aggregates with engagement metrics"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "bad request: missing required search parameters or invalid input"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database or embedder error"
+// @Param q query string false "Semantic search query in natural language (3–512 chars). Ranks by embedding similarity."
+// @Param acc query number false "Match strictness when q is set. 0.0=broad, 1.0=strict. Default 0.75." default(0.75) minimum(0) maximum(1)
+// @Param content_type query string false "Restrict to content kind: news or blog." Enums(news,blog)
+// @Param urls query []string false "Fetch articles by exact URL (CSV). Satisfies the required-search-param rule on its own." collectionFormat(csv)
+// @Param tags query []string false "Fuzzy filter across categories+regions+entities (AND between values). Good when exact tag spelling is unknown." collectionFormat(csv)
+// @Param categories query []string false "Exact topic filter (OR). Case sensitive — use listCategories first." collectionFormat(csv)
+// @Param regions query []string false "Exact region filter (OR). Case sensitive — use listRegions first." collectionFormat(csv)
+// @Param entities query []string false "Exact entity filter (OR). Case sensitive — use listEntities first." collectionFormat(csv)
+// @Param sources query []string false "Publisher source ID filter (OR). Resolve names via getPublishers." collectionFormat(csv)
+// @Param from query string false "Only articles published or updated on/after this date (YYYY-MM-DD)." format(date)
+// @Param full_content query bool false "Include full article body. Default false (summary only)." default(false)
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Skip N results for pagination. Default 0." minimum(0)
+// @Success 200 {array} beansack.BeanAggregate "Articles with publisher info, engagement metrics, and trend_score"
+// @Success 204 "No matching articles (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Missing required search param or invalid input"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database or embedder unavailable; retry"
+// @ID searchArticles
 // @Router /articles/search [get]
-// this one searches through the entire database and returns result sorted by relevance.
-// this is a heavy query, it will be slow and higher network bandwidth
 func (r *Configuration) searchArticles(c *gin.Context) {
 	input := c.MustGet("req_params").(ArticlesInput)
 	conditions := c.MustGet("req_conditions").(bs.Condition)
@@ -387,33 +394,34 @@ func (r *Configuration) searchArticles(c *gin.Context) {
 }
 
 // getLatestArticles godoc
-// @Summary Get latest articles (reverse chronological)
-// @Description Retrieves the most recently published articles, sorted by publish date (newest first).
-// Optionally filter by semantic search, categories, regions, entities, or publishers.
-// If no `from` date provided, defaults to last 7 days. Results include publisher info and engagement metrics.
-// For filtering: `tags` provides case/whitespace-insensitive text search across categories, regions, and entities (recommended starting point).
-// For precision filtering, use `categories`, `regions`, `entities` (case/whitespace-sensitive). Get exhaustive tag lists from /tags/* endpoints.
+// @Summary Search or list newest articles (reverse chronological)
+// @Description Returns recently published articles sorted by publish date (newest first).
+// @Description **Time window**: if `from` is omitted, defaults to the last 7 days.
+// @Description **Filters** (all optional): same semantics as searchArticles — `q` for semantic search, `tags` for fuzzy match, or exact `categories`/`regions`/`entities`/`sources`.
+// @Description **When to use**: monitoring recent news in a topic without full-corpus search cost. Lighter than searchArticles.
+// @Description **Related tools**: listCategories, listEntities, listRegions, searchArticles, getTrendingArticles.
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param q query string false "optional semantic search query (character length 3-512)"
-// @Param acc query number false "embedding accuracy/similarity threshold (0.0-1.0)" default(0.75) minimum(0) maximum(1)
-// @Param kind query string false "content type filter (news, blog, post, etc.)"
-// @Param tags query []string false "case/whitespace-insensitive text search across categories, regions, entities (recommended)" collectionFormat(csv)
-// @Param categories query []string false "precise category filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param regions query []string false "precise region filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param entities query []string false "precise entity filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param sources query []string false "publisher source filters (inclusive OR)" collectionFormat(csv)
-// @Param from query string false "published since date (YYYY-MM-DD, defaults to 7 days ago if omitted)" format(date)
-// @Param full_content query bool false "include full article content" default(false)
-// @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset" minimum(0)
-// @Success 200 {array} beansack.Bean "array of latest articles sorted by publish date"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "bad request: invalid parameters"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database or embedder error"
+// @Param q query string false "Optional semantic search query (3–512 chars). Narrows results by embedding similarity."
+// @Param acc query number false "Match strictness when q is set. Default 0.75." default(0.75) minimum(0) maximum(1)
+// @Param content_type query string false "Restrict to content kind: news or blog." Enums(news,blog)
+// @Param tags query []string false "Fuzzy filter across categories+regions+entities (AND between values)." collectionFormat(csv)
+// @Param categories query []string false "Exact topic filter (OR). Use listCategories for valid values." collectionFormat(csv)
+// @Param regions query []string false "Exact region filter (OR). Use listRegions for valid values." collectionFormat(csv)
+// @Param entities query []string false "Exact entity filter (OR). Use listEntities for valid values." collectionFormat(csv)
+// @Param sources query []string false "Publisher source ID filter (OR)." collectionFormat(csv)
+// @Param from query string false "Published on/after this date (YYYY-MM-DD). Defaults to 7 days ago when omitted." format(date)
+// @Param full_content query bool false "Include full article body. Default false." default(false)
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Skip N results. Default 0." minimum(0)
+// @Success 200 {array} beansack.Bean "Latest articles sorted by published_at descending"
+// @Success 204 "No articles in window (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Invalid query parameters"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database or embedder unavailable; retry"
+// @ID getLatestArticles
 // @Router /articles/latest [get]
 func (r *Configuration) getLatestArticles(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
@@ -430,36 +438,34 @@ func (r *Configuration) getLatestArticles(c *gin.Context) {
 }
 
 // getTrendingArticles godoc
-// @Summary Get trending articles
-// @Description Retrieves trending articles ranked by trend score. Trend score is computed from:
-// - Social engagement metrics (likes, comments, shares, subscriber reactions)
-// - Publication coverage (number of sources publishing the same content)
-// - Recency of engagement
-// If no `from` date provided, defaults to last 7 days. Results sorted by trend score (highest first).
-// Optionally filter by semantic search or other criteria.
-// For filtering: `tags` provides case/whitespace-insensitive text search across categories, regions, and entities (recommended starting point).
-// For precision filtering, use `categories`, `regions`, `entities` (case/whitespace-sensitive). Get exhaustive tag lists from /tags/* endpoints.
+// @Summary Search or list trending articles by engagement score
+// @Description Returns articles ranked by `trend_score` (highest first). Trend score blends social engagement (likes, comments, shares), cross-outlet coverage, and recency.
+// @Description **Time window**: if `from` is omitted, defaults to the last 7 days of trending activity.
+// @Description **Filters** (all optional): same semantics as searchArticles.
+// @Description **When to use**: surface what is gaining traction now — prefer over getLatestArticles when popularity matters more than recency alone.
+// @Description **Related tools**: getTopHeadlines (24h subset), searchArticles, getArticlePropagation.
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param q query string false "optional semantic search query (character length 3-512)"
-// @Param acc query number false "embedding accuracy/similarity threshold (0.0-1.0, higher = stricter)" default(0.75) minimum(0) maximum(1)
-// @Param content_type query string false "content type filter (news, blog, post, etc.)"
-// @Param tags query []string false "case/whitespace-insensitive text search across categories, regions, entities (recommended)" collectionFormat(csv)
-// @Param categories query []string false "precise category filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param regions query []string false "precise region filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param entities query []string false "precise entity filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param sources query []string false "publisher source filters (inclusive OR)" collectionFormat(csv)
-// @Param from query string false "trending since date (YYYY-MM-DD, defaults to 7 days ago)" format(date)
-// @Param full_content query bool false "include full article content" default(false)
-// @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset" minimum(0)
-// @Success 200 {array} beansack.BeanTrend "array of trending articles sorted by trend_score (descending)"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "bad request: invalid parameters"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database or embedder error"
+// @Param q query string false "Optional semantic search query (3–512 chars)."
+// @Param acc query number false "Match strictness when q is set. Default 0.75." default(0.75) minimum(0) maximum(1)
+// @Param content_type query string false "Restrict to content kind: news or blog." Enums(news,blog)
+// @Param tags query []string false "Fuzzy filter across categories+regions+entities (AND between values)." collectionFormat(csv)
+// @Param categories query []string false "Exact topic filter (OR)." collectionFormat(csv)
+// @Param regions query []string false "Exact region filter (OR)." collectionFormat(csv)
+// @Param entities query []string false "Exact entity filter (OR)." collectionFormat(csv)
+// @Param sources query []string false "Publisher source ID filter (OR)." collectionFormat(csv)
+// @Param from query string false "Trending activity since this date (YYYY-MM-DD). Defaults to 7 days ago when omitted." format(date)
+// @Param full_content query bool false "Include full article body. Default false." default(false)
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Skip N results. Default 0." minimum(0)
+// @Success 200 {array} beansack.BeanTrend "Articles with engagement metrics and trend_score, sorted descending"
+// @Success 204 "No trending articles in window (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Invalid query parameters"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database or embedder unavailable; retry"
+// @ID getTrendingArticles
 // @Router /articles/trending [get]
 func (r *Configuration) getTrendingArticles(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
@@ -475,33 +481,33 @@ func (r *Configuration) getTrendingArticles(c *gin.Context) {
 }
 
 // getTopHeadlinesArticles godoc
-// @Summary Get top headlines (last 24 hours)
-// @Description Retrieves top trending headlines from the past 24 hours, ranked by trend score.
-// This is a specialized version of /articles/trending that uses a narrower time window for results.
-// Useful for curating breaking news and most-discussed topics of the day.
-// Optional filters apply the same as trending articles.
-// For filtering: `tags` provides case/whitespace-insensitive text search across categories, regions, and entities (recommended starting point).
-// For precision filtering, use `categories`, `regions`, `entities` (case/whitespace-sensitive). Get exhaustive tag lists from /tags/* endpoints.
+// @Summary Search or list top headlines from the last 24 hours
+// @Description Returns the highest trend_score articles from the past 24 hours — a narrow window on getTrendingArticles.
+// @Description **When to use**: breaking news, daily briefings, or "what is hot today" without a custom date range.
+// @Description **Note**: `from` is not accepted; the 24h window is fixed server-side.
+// @Description **Filters** (all optional): same semantics as getTrendingArticles except no date override.
+// @Description **Related tools**: getTrendingArticles (7-day window), searchArticles.
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param q query string false "optional semantic search query (character length 3-512)"
-// @Param acc query number false "embedding accuracy/similarity threshold (0.0-1.0)" default(0.75) minimum(0) maximum(1)
-// @Param content_type query string false "content type filter (news, blog, post, etc.)"
-// @Param tags query []string false "case/whitespace-insensitive text search across categories, regions, entities (recommended)" collectionFormat(csv)
-// @Param categories query []string false "precise category filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param regions query []string false "precise region filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param entities query []string false "precise entity filters (inclusive OR, case/whitespace-sensitive)" collectionFormat(csv)
-// @Param sources query []string false "publisher source filters (inclusive OR)" collectionFormat(csv)
-// @Param full_content query bool false "include full article content" default(false)
-// @Param limit query int false "page limit" default(16) minimum(1) maximum(128)
-// @Param offset query int false "pagination offset" minimum(0)
-// @Success 200 {array} beansack.BeanTrend "array of top headlines from last 24h, sorted by trend_score"
-// @Success 204 "no data available"
-// @Failure 400 {object} map[string]string "bad request: invalid parameters"
-// @Failure 401 {object} map[string]string "unauthorized: missing or invalid API key"
-// @Failure 429 {object} map[string]string "rate limit exceeded"
-// @Failure 500 {object} map[string]string "database or embedder error"
+// @Param q query string false "Optional semantic search query (3–512 chars)."
+// @Param acc query number false "Match strictness when q is set. Default 0.75." default(0.75) minimum(0) maximum(1)
+// @Param content_type query string false "Restrict to content kind: news or blog." Enums(news,blog)
+// @Param tags query []string false "Fuzzy filter across categories+regions+entities (AND between values)." collectionFormat(csv)
+// @Param categories query []string false "Exact topic filter (OR)." collectionFormat(csv)
+// @Param regions query []string false "Exact region filter (OR)." collectionFormat(csv)
+// @Param entities query []string false "Exact entity filter (OR)." collectionFormat(csv)
+// @Param sources query []string false "Publisher source ID filter (OR)." collectionFormat(csv)
+// @Param full_content query bool false "Include full article body. Default false." default(false)
+// @Param limit query int false "Page size. Default 16, max 128." default(16) minimum(1) maximum(128)
+// @Param offset query int false "Skip N results. Default 0." minimum(0)
+// @Success 200 {array} beansack.BeanTrend "Top headlines from last 24h sorted by trend_score descending"
+// @Success 204 "No headlines in last 24h (empty result, not an error)"
+// @Failure 400 {object} map[string]string "Invalid query parameters"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database or embedder unavailable; retry"
+// @ID getTopHeadlines
 // @Router /articles/top-headlines [get]
 func (r *Configuration) getTopHeadlinesArticles(c *gin.Context) {
 	conditions := c.MustGet("req_conditions").(bs.Condition)
@@ -514,21 +520,47 @@ func (r *Configuration) getTopHeadlinesArticles(c *gin.Context) {
 }
 
 // getArticlePropagation godoc
-// @Summary Get article propagation
-// @Description For each article URL, returns publisher coverage (from related_beans) and social mentions (from chatters).
+// @Summary Track how articles spread (GET)
+// @Description For each seed article URL, returns cross-outlet republication (`coverage`) and social/forum mentions (`mentions`).
+// @Description **Input**: pass up to 128 article URLs as comma-separated query param `urls`.
+// @Description **When to use**: after searchArticles — measure whether a story was picked up elsewhere or discussed on social platforms.
+// @Description **Returns**: one PropagationResult per input URL (always HTTP 200; empty arrays when no propagation found).
+// @Description **Related tools**: searchArticles, getTrendingArticles.
+// @Tags Articles
+// @Produce json
+// @Param urls query []string true "Seed article URLs to analyze (CSV, 1–128 valid HTTP(S) URLs)" collectionFormat(csv)
+// @Success 200 {array} beansack.PropagationResult "One result object per input URL with coverage and mentions arrays"
+// @Failure 400 {object} map[string]string "Missing urls, too many urls (>128), or invalid URL format"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database unavailable; retry"
+// @ID getArticlePropagation
+// @Router /articles/propagation [get]
+func (r *Configuration) getArticlePropagation(c *gin.Context) {
+	r.handleArticlePropagation(c)
+}
+
+// postArticlePropagation godoc
+// @Summary Track how articles spread (POST)
+// @Description Same as getArticlePropagation but accepts a JSON body — preferred when URLs contain characters awkward in query strings.
+// @Description **Input**: JSON body `{ "urls": ["https://...", ...] }` with 1–128 valid HTTP(S) URLs.
+// @Description **When to use**: batch propagation lookup from agent workflows that already hold URL lists in JSON.
 // @Tags Articles
 // @Accept json
 // @Produce json
-// @Param urls query []string true "Article URLs (CSV, GET only, max 128)" collectionFormat(csv)
-// @Param input body PropagationInput true "JSON body with urls array (POST only, max 128 items)"
-// @Success 200 {array} beansack.PropagationResult
-// @Failure 400 {object} map[string]string "missing urls, too many urls (>128), invalid URL, or binding error"
-// @Failure 401 {object} map[string]string
-// @Failure 429 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /articles/propagation [get]
+// @Param input body PropagationInput true "JSON object with urls array (1–128 seed article URLs)"
+// @Success 200 {array} beansack.PropagationResult "One result object per input URL with coverage and mentions arrays"
+// @Failure 400 {object} map[string]string "Missing urls, too many urls (>128), or invalid URL format"
+// @Failure 401 {object} map[string]string "Missing or invalid API key"
+// @Failure 429 {object} map[string]string "Concurrency limit exceeded; retry shortly"
+// @Failure 500 {object} map[string]string "Database unavailable; retry"
+// @ID postArticlePropagation
 // @Router /articles/propagation [post]
-func (r *Configuration) getArticlePropagation(c *gin.Context) {
+func (r *Configuration) postArticlePropagation(c *gin.Context) {
+	r.handleArticlePropagation(c)
+}
+
+func (r *Configuration) handleArticlePropagation(c *gin.Context) {
 	input, err := bindPropagationInput(c)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -605,7 +637,7 @@ func NewRouter(db bs.Beansack, embedder nlp.Embedder, api_keys map[string]string
 		articles.GET("/top-headlines", config.getTopHeadlinesArticles)
 	}
 	protected.GET("/articles/propagation", config.getArticlePropagation)
-	protected.POST("/articles/propagation", config.getArticlePropagation)
+	protected.POST("/articles/propagation", config.postArticlePropagation)
 	return router
 }
 

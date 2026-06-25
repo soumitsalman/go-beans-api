@@ -1,3 +1,13 @@
+// @title 			Beans News API & MCP
+// @version 		0.8
+// @description 	MCP-ready news aggregation and semantic search over RSS-sourced articles.
+// @description 	Agent workflow: (1) listCategories, listEntities, listRegions — discover exact filter values; (2) searchArticles — primary search tool; (3) getLatestArticles, getTrendingArticles, getTopHeadlines — time-ordered feeds; (4) getPublishers — resolve source IDs; (5) getArticlePropagation / postArticlePropagation — track story spread.
+// @description 	Conventions: Auth optional (API-key header when enabled). Pagination: limit default 16 max 128, offset default 0. Empty results return HTTP 204 (not an error). Filter tips: start with fuzzy tags param; use exact categories/regions/entities after calling /tags/* list tools; q+acc enables semantic vector search.
+// @schemes 		https
+// @license.name 	MIT
+// @contact.name 	Project Cafecito
+// @contact.url  	http://cafecito.tech
+// @contact.email 	soumitsrah@cafecito.tech
 package main
 
 import (

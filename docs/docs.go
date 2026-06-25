@@ -9,7 +9,14 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "contact": {
+            "name": "Project Cafecito",
+            "url": "http://cafecito.tech",
+            "email": "soumitsrah@cafecito.tech"
+        },
+        "license": {
+            "name": "MIT"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -17,7 +24,7 @@ const docTemplate = `{
     "paths": {
         "/articles/latest": {
             "get": {
-                "description": "Retrieves the most recently published articles, sorted by publish date (newest first).",
+                "description": "Returns recently published articles sorted by publish date (newest first).\n**Time window**: if ` + "`" + `from` + "`" + ` is omitted, defaults to the last 7 days.\n**Filters** (all optional): same semantics as searchArticles — ` + "`" + `q` + "`" + ` for semantic search, ` + "`" + `tags` + "`" + ` for fuzzy match, or exact ` + "`" + `categories` + "`" + `/` + "`" + `regions` + "`" + `/` + "`" + `entities` + "`" + `/` + "`" + `sources` + "`" + `.\n**When to use**: monitoring recent news in a topic without full-corpus search cost. Lighter than searchArticles.\n**Related tools**: listCategories, listEntities, listRegions, searchArticles, getTrendingArticles.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27,11 +34,12 @@ const docTemplate = `{
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Get latest articles (reverse chronological)",
+                "summary": "Search or list newest articles (reverse chronological)",
+                "operationId": "getLatestArticles",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "optional semantic search query (character length 3-512)",
+                        "description": "Optional semantic search query (3–512 chars). Narrows results by embedding similarity.",
                         "name": "q",
                         "in": "query"
                     },
@@ -40,14 +48,18 @@ const docTemplate = `{
                         "minimum": 0,
                         "type": "number",
                         "default": 0.75,
-                        "description": "embedding accuracy/similarity threshold (0.0-1.0)",
+                        "description": "Match strictness when q is set. Default 0.75.",
                         "name": "acc",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "news",
+                            "blog"
+                        ],
                         "type": "string",
-                        "description": "content type filter (news, blog, post, etc.)",
-                        "name": "kind",
+                        "description": "Restrict to content kind: news or blog.",
+                        "name": "content_type",
                         "in": "query"
                     },
                     {
@@ -56,7 +68,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "case/whitespace-insensitive text search across categories, regions, entities (recommended)",
+                        "description": "Fuzzy filter across categories+regions+entities (AND between values).",
                         "name": "tags",
                         "in": "query"
                     },
@@ -66,7 +78,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise category filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact topic filter (OR). Use listCategories for valid values.",
                         "name": "categories",
                         "in": "query"
                     },
@@ -76,7 +88,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise region filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact region filter (OR). Use listRegions for valid values.",
                         "name": "regions",
                         "in": "query"
                     },
@@ -86,7 +98,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact entity filter (OR). Use listEntities for valid values.",
                         "name": "entities",
                         "in": "query"
                     },
@@ -96,21 +108,21 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "publisher source filters (inclusive OR)",
+                        "description": "Publisher source ID filter (OR).",
                         "name": "sources",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "format": "date",
-                        "description": "published since date (YYYY-MM-DD, defaults to 7 days ago if omitted)",
+                        "description": "Published on/after this date (YYYY-MM-DD). Defaults to 7 days ago when omitted.",
                         "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "default": false,
-                        "description": "include full article content",
+                        "description": "Include full article body. Default false.",
                         "name": "full_content",
                         "in": "query"
                     },
@@ -119,21 +131,21 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset",
+                        "description": "Skip N results. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "array of latest articles sorted by publish date",
+                        "description": "Latest articles sorted by published_at descending",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -142,10 +154,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No articles in window (empty result, not an error)"
                     },
                     "400": {
-                        "description": "bad request: invalid parameters",
+                        "description": "Invalid query parameters",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -154,7 +166,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -163,7 +175,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -172,7 +184,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database or embedder error",
+                        "description": "Database or embedder unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -185,17 +197,15 @@ const docTemplate = `{
         },
         "/articles/propagation": {
             "get": {
-                "description": "For each article URL, returns publisher coverage (from related_beans) and social mentions (from chatters).",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "For each seed article URL, returns cross-outlet republication (` + "`" + `coverage` + "`" + `) and social/forum mentions (` + "`" + `mentions` + "`" + `).\n**Input**: pass up to 128 article URLs as comma-separated query param ` + "`" + `urls` + "`" + `.\n**When to use**: after searchArticles — measure whether a story was picked up elsewhere or discussed on social platforms.\n**Returns**: one PropagationResult per input URL (always HTTP 200; empty arrays when no propagation found).\n**Related tools**: searchArticles, getTrendingArticles.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Get article propagation",
+                "summary": "Track how articles spread (GET)",
+                "operationId": "getArticlePropagation",
                 "parameters": [
                     {
                         "type": "array",
@@ -203,24 +213,15 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Article URLs (CSV, GET only, max 128)",
+                        "description": "Seed article URLs to analyze (CSV, 1–128 valid HTTP(S) URLs)",
                         "name": "urls",
                         "in": "query",
                         "required": true
-                    },
-                    {
-                        "description": "JSON body with urls array (POST only, max 128 items)",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/router.PropagationInput"
-                        }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "One result object per input URL with coverage and mentions arrays",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -229,7 +230,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "missing urls, too many urls (\u003e128), invalid URL, or binding error",
+                        "description": "Missing urls, too many urls (\u003e128), or invalid URL format",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -238,7 +239,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -247,7 +248,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "Too Many Requests",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -256,7 +257,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Database unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -267,7 +268,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "For each article URL, returns publisher coverage (from related_beans) and social mentions (from chatters).",
+                "description": "Same as getArticlePropagation but accepts a JSON body — preferred when URLs contain characters awkward in query strings.\n**Input**: JSON body ` + "`" + `{ \"urls\": [\"https://...\", ...] }` + "`" + ` with 1–128 valid HTTP(S) URLs.\n**When to use**: batch propagation lookup from agent workflows that already hold URL lists in JSON.",
                 "consumes": [
                     "application/json"
                 ],
@@ -277,21 +278,11 @@ const docTemplate = `{
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Get article propagation",
+                "summary": "Track how articles spread (POST)",
+                "operationId": "postArticlePropagation",
                 "parameters": [
                     {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "Article URLs (CSV, GET only, max 128)",
-                        "name": "urls",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "description": "JSON body with urls array (POST only, max 128 items)",
+                        "description": "JSON object with urls array (1–128 seed article URLs)",
                         "name": "input",
                         "in": "body",
                         "required": true,
@@ -302,7 +293,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "One result object per input URL with coverage and mentions arrays",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -311,7 +302,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "missing urls, too many urls (\u003e128), invalid URL, or binding error",
+                        "description": "Missing urls, too many urls (\u003e128), or invalid URL format",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -320,7 +311,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -329,7 +320,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "Too Many Requests",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -338,7 +329,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Database unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -351,7 +342,7 @@ const docTemplate = `{
         },
         "/articles/search": {
             "get": {
-                "description": "Perform semantic (vector embedding) or tag-based search across all articles in the database.",
+                "description": "**Primary MCP tool** — full-corpus search sorted by relevance.\n**Requires at least one of**: ` + "`" + `q` + "`" + `, ` + "`" + `tags` + "`" + `, ` + "`" + `categories` + "`" + `, ` + "`" + `regions` + "`" + `, ` + "`" + `entities` + "`" + `, or ` + "`" + `urls` + "`" + `.\n**Search modes** (combinable with filters):\n- ` + "`" + `q` + "`" + ` + ` + "`" + `acc` + "`" + `: semantic vector search over article embeddings (natural language, 3–512 chars).\n- ` + "`" + `tags` + "`" + `: fuzzy text match across categories, regions, and entities (AND between tag values; case/whitespace insensitive).\n- ` + "`" + `categories` + "`" + ` / ` + "`" + `regions` + "`" + ` / ` + "`" + `entities` + "`" + `: exact array filters (OR within each dimension; case/whitespace sensitive — discover values via listCategories, listEntities, listRegions).\n- ` + "`" + `urls` + "`" + `: fetch specific articles by canonical URL (CSV).\n**Performance**: scans the full index; prefer ` + "`" + `full_content=false` + "`" + ` unless the body is needed. Heavier than feed endpoints.\n**Related tools**: listCategories, listEntities, listRegions, getPublishers, getArticlePropagation.",
                 "consumes": [
                     "application/json"
                 ],
@@ -361,11 +352,12 @@ const docTemplate = `{
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Search articles",
+                "summary": "Search all articles by topic, tags, or URL",
+                "operationId": "searchArticles",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "semantic vector search query (character length 3-512, natural language)",
+                        "description": "Semantic search query in natural language (3–512 chars). Ranks by embedding similarity.",
                         "name": "q",
                         "in": "query"
                     },
@@ -374,13 +366,17 @@ const docTemplate = `{
                         "minimum": 0,
                         "type": "number",
                         "default": 0.75,
-                        "description": "embedding accuracy/similarity threshold (0.0-1.0, higher = stricter match)",
+                        "description": "Match strictness when q is set. 0.0=broad, 1.0=strict. Default 0.75.",
                         "name": "acc",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "news",
+                            "blog"
+                        ],
                         "type": "string",
-                        "description": "content type filter (news, blog, post, generated, comment, etc.)",
+                        "description": "Restrict to content kind: news or blog.",
                         "name": "content_type",
                         "in": "query"
                     },
@@ -390,7 +386,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "specific article URLs to fetch directly (CSV)",
+                        "description": "Fetch articles by exact URL (CSV). Satisfies the required-search-param rule on its own.",
                         "name": "urls",
                         "in": "query"
                     },
@@ -400,7 +396,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "case/whitespace-insensitive text search across categories, regions, entities (AND combination, recommended)",
+                        "description": "Fuzzy filter across categories+regions+entities (AND between values). Good when exact tag spelling is unknown.",
                         "name": "tags",
                         "in": "query"
                     },
@@ -410,7 +406,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise category topic filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact topic filter (OR). Case sensitive — use listCategories first.",
                         "name": "categories",
                         "in": "query"
                     },
@@ -420,7 +416,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise geographic region filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact region filter (OR). Case sensitive — use listRegions first.",
                         "name": "regions",
                         "in": "query"
                     },
@@ -430,7 +426,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise named entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact entity filter (OR). Case sensitive — use listEntities first.",
                         "name": "entities",
                         "in": "query"
                     },
@@ -440,21 +436,21 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "publisher/source ID filters (inclusive OR)",
+                        "description": "Publisher source ID filter (OR). Resolve names via getPublishers.",
                         "name": "sources",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "format": "date",
-                        "description": "published/updated since date (ISO 8601 date format YYYY-MM-DD)",
+                        "description": "Only articles published or updated on/after this date (YYYY-MM-DD).",
                         "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "default": false,
-                        "description": "if true, include full article content (large payload)",
+                        "description": "Include full article body. Default false (summary only).",
                         "name": "full_content",
                         "in": "query"
                     },
@@ -463,21 +459,21 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit (items per page)",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset (number of items to skip)",
+                        "description": "Skip N results for pagination. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "array of article aggregates with engagement metrics",
+                        "description": "Articles with publisher info, engagement metrics, and trend_score",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -486,10 +482,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No matching articles (empty result, not an error)"
                     },
                     "400": {
-                        "description": "bad request: missing required search parameters or invalid input",
+                        "description": "Missing required search param or invalid input",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -498,7 +494,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -507,7 +503,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -516,7 +512,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database or embedder error",
+                        "description": "Database or embedder unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -529,7 +525,7 @@ const docTemplate = `{
         },
         "/articles/top-headlines": {
             "get": {
-                "description": "Retrieves top trending headlines from the past 24 hours, ranked by trend score.",
+                "description": "Returns the highest trend_score articles from the past 24 hours — a narrow window on getTrendingArticles.\n**When to use**: breaking news, daily briefings, or \"what is hot today\" without a custom date range.\n**Note**: ` + "`" + `from` + "`" + ` is not accepted; the 24h window is fixed server-side.\n**Filters** (all optional): same semantics as getTrendingArticles except no date override.\n**Related tools**: getTrendingArticles (7-day window), searchArticles.",
                 "consumes": [
                     "application/json"
                 ],
@@ -539,11 +535,12 @@ const docTemplate = `{
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Get top headlines (last 24 hours)",
+                "summary": "Search or list top headlines from the last 24 hours",
+                "operationId": "getTopHeadlines",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "optional semantic search query (character length 3-512)",
+                        "description": "Optional semantic search query (3–512 chars).",
                         "name": "q",
                         "in": "query"
                     },
@@ -552,13 +549,17 @@ const docTemplate = `{
                         "minimum": 0,
                         "type": "number",
                         "default": 0.75,
-                        "description": "embedding accuracy/similarity threshold (0.0-1.0)",
+                        "description": "Match strictness when q is set. Default 0.75.",
                         "name": "acc",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "news",
+                            "blog"
+                        ],
                         "type": "string",
-                        "description": "content type filter (news, blog, post, etc.)",
+                        "description": "Restrict to content kind: news or blog.",
                         "name": "content_type",
                         "in": "query"
                     },
@@ -568,7 +569,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "case/whitespace-insensitive text search across categories, regions, entities (recommended)",
+                        "description": "Fuzzy filter across categories+regions+entities (AND between values).",
                         "name": "tags",
                         "in": "query"
                     },
@@ -578,7 +579,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise category filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact topic filter (OR).",
                         "name": "categories",
                         "in": "query"
                     },
@@ -588,7 +589,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise region filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact region filter (OR).",
                         "name": "regions",
                         "in": "query"
                     },
@@ -598,7 +599,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact entity filter (OR).",
                         "name": "entities",
                         "in": "query"
                     },
@@ -608,14 +609,14 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "publisher source filters (inclusive OR)",
+                        "description": "Publisher source ID filter (OR).",
                         "name": "sources",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "default": false,
-                        "description": "include full article content",
+                        "description": "Include full article body. Default false.",
                         "name": "full_content",
                         "in": "query"
                     },
@@ -624,21 +625,21 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset",
+                        "description": "Skip N results. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "array of top headlines from last 24h, sorted by trend_score",
+                        "description": "Top headlines from last 24h sorted by trend_score descending",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -647,10 +648,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No headlines in last 24h (empty result, not an error)"
                     },
                     "400": {
-                        "description": "bad request: invalid parameters",
+                        "description": "Invalid query parameters",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -659,7 +660,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -668,7 +669,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -677,7 +678,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database or embedder error",
+                        "description": "Database or embedder unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -690,7 +691,7 @@ const docTemplate = `{
         },
         "/articles/trending": {
             "get": {
-                "description": "Retrieves trending articles ranked by trend score. Trend score is computed from:",
+                "description": "Returns articles ranked by ` + "`" + `trend_score` + "`" + ` (highest first). Trend score blends social engagement (likes, comments, shares), cross-outlet coverage, and recency.\n**Time window**: if ` + "`" + `from` + "`" + ` is omitted, defaults to the last 7 days of trending activity.\n**Filters** (all optional): same semantics as searchArticles.\n**When to use**: surface what is gaining traction now — prefer over getLatestArticles when popularity matters more than recency alone.\n**Related tools**: getTopHeadlines (24h subset), searchArticles, getArticlePropagation.",
                 "consumes": [
                     "application/json"
                 ],
@@ -700,11 +701,12 @@ const docTemplate = `{
                 "tags": [
                     "Articles"
                 ],
-                "summary": "Get trending articles",
+                "summary": "Search or list trending articles by engagement score",
+                "operationId": "getTrendingArticles",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "optional semantic search query (character length 3-512)",
+                        "description": "Optional semantic search query (3–512 chars).",
                         "name": "q",
                         "in": "query"
                     },
@@ -713,13 +715,17 @@ const docTemplate = `{
                         "minimum": 0,
                         "type": "number",
                         "default": 0.75,
-                        "description": "embedding accuracy/similarity threshold (0.0-1.0, higher = stricter)",
+                        "description": "Match strictness when q is set. Default 0.75.",
                         "name": "acc",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "news",
+                            "blog"
+                        ],
                         "type": "string",
-                        "description": "content type filter (news, blog, post, etc.)",
+                        "description": "Restrict to content kind: news or blog.",
                         "name": "content_type",
                         "in": "query"
                     },
@@ -729,7 +735,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "case/whitespace-insensitive text search across categories, regions, entities (recommended)",
+                        "description": "Fuzzy filter across categories+regions+entities (AND between values).",
                         "name": "tags",
                         "in": "query"
                     },
@@ -739,7 +745,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise category filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact topic filter (OR).",
                         "name": "categories",
                         "in": "query"
                     },
@@ -749,7 +755,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise region filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact region filter (OR).",
                         "name": "regions",
                         "in": "query"
                     },
@@ -759,7 +765,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "precise entity filters (inclusive OR, case/whitespace-sensitive)",
+                        "description": "Exact entity filter (OR).",
                         "name": "entities",
                         "in": "query"
                     },
@@ -769,21 +775,21 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "publisher source filters (inclusive OR)",
+                        "description": "Publisher source ID filter (OR).",
                         "name": "sources",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "format": "date",
-                        "description": "trending since date (YYYY-MM-DD, defaults to 7 days ago)",
+                        "description": "Trending activity since this date (YYYY-MM-DD). Defaults to 7 days ago when omitted.",
                         "name": "from",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "default": false,
-                        "description": "include full article content",
+                        "description": "Include full article body. Default false.",
                         "name": "full_content",
                         "in": "query"
                     },
@@ -792,21 +798,21 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset",
+                        "description": "Skip N results. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "array of trending articles sorted by trend_score (descending)",
+                        "description": "Articles with engagement metrics and trend_score, sorted descending",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -815,10 +821,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No trending articles in window (empty result, not an error)"
                     },
                     "400": {
-                        "description": "bad request: invalid parameters",
+                        "description": "Invalid query parameters",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -827,7 +833,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -836,7 +842,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -845,7 +851,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database or embedder error",
+                        "description": "Database or embedder unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -858,17 +864,18 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
-                "description": "Returns service health status",
+                "description": "Lightweight liveness probe. Use before other tools to confirm the service is reachable. No authentication required when API keys are disabled.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Health"
                 ],
-                "summary": "Health check",
+                "summary": "Check API health",
+                "operationId": "healthCheck",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "status alive",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -881,14 +888,15 @@ const docTemplate = `{
         },
         "/sources": {
             "get": {
-                "description": "Retrieves detailed metadata for one or more sources including site name, description, favicon.",
+                "description": "Look up display metadata for one or more publisher source IDs found on article ` + "`" + `source` + "`" + ` fields.\nReturns site name, base URL, description, and favicon for each requested source ID.\n**When to use**: after searchArticles or feed endpoints to humanize source IDs in UI or agent responses.\n**Required**: at least one value in ` + "`" + `sources` + "`" + ` (comma-separated source IDs, e.g. techcrunch.com).\n**Related tools**: searchArticles, getLatestArticles.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Publishers"
                 ],
-                "summary": "Query source metadata",
+                "summary": "Resolve publisher source metadata",
+                "operationId": "getPublishers",
                 "parameters": [
                     {
                         "type": "array",
@@ -896,7 +904,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "source IDs to fetch metadata for (comma-separated CSV)",
+                        "description": "Publisher source IDs to resolve (CSV). Example: techcrunch.com,theverge.com",
                         "name": "sources",
                         "in": "query",
                         "required": true
@@ -906,21 +914,21 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit (items per page)",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset (number of items to skip)",
+                        "description": "Number of items to skip. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "array of publisher metadata objects",
+                        "description": "Publisher metadata objects keyed by source ID",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -929,10 +937,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No matching publishers (empty result, not an error)"
                     },
                     "400": {
-                        "description": "invalid pagination parameters or missing/invalid sources",
+                        "description": "Missing sources or invalid pagination",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -941,7 +949,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -950,7 +958,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -959,7 +967,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database error",
+                        "description": "Database unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -972,35 +980,36 @@ const docTemplate = `{
         },
         "/tags/categories": {
             "get": {
-                "description": "Retrieves a paginated list of unique article categories/topics discovered in the database.",
+                "description": "Discover valid values for the ` + "`" + `categories` + "`" + ` filter on article endpoints.\nReturns a paginated array of unique topic labels extracted from indexed articles (e.g. \"Artificial Intelligence\", \"Cybersecurity\", \"Politics\").\n**When to use**: call before searchArticles or feed endpoints when you need exact, case-sensitive category strings.\n**Related tools**: listEntities, listRegions, searchArticles.\n**Pagination**: use ` + "`" + `offset` + "`" + ` to walk the full catalog when ` + "`" + `limit` + "`" + ` \u003c total count.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Tags"
                 ],
-                "summary": "List article categories",
+                "summary": "List article category topics",
+                "operationId": "listCategories",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit (items per page)",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset (number of items to skip)",
+                        "description": "Number of items to skip. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "list of category strings",
+                        "description": "JSON array of category label strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -1009,10 +1018,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No categories in index (empty result, not an error)"
                     },
                     "400": {
-                        "description": "invalid pagination parameters",
+                        "description": "Invalid limit or offset",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1021,7 +1030,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1030,7 +1039,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1039,7 +1048,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database error",
+                        "description": "Database unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1052,7 +1061,7 @@ const docTemplate = `{
         },
         "/tags/entities": {
             "get": {
-                "description": "Retrieves a paginated list of unique named entities (persons, organizations, products, places) extracted from articles.",
+                "description": "Discover valid values for the ` + "`" + `entities` + "`" + ` filter on article endpoints.\nReturns a paginated array of unique named entities (people, organizations, products, places) extracted via NLP from article text.\n**When to use**: call before searchArticles when filtering by specific people, companies, or places with exact spelling.\n**Related tools**: listCategories, listRegions, searchArticles.",
                 "produces": [
                     "application/json"
                 ],
@@ -1060,27 +1069,28 @@ const docTemplate = `{
                     "Tags"
                 ],
                 "summary": "List named entities",
+                "operationId": "listEntities",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit (items per page)",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset (number of items to skip)",
+                        "description": "Number of items to skip. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "list of entity strings",
+                        "description": "JSON array of entity label strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -1089,10 +1099,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No entities in index (empty result, not an error)"
                     },
                     "400": {
-                        "description": "invalid pagination parameters",
+                        "description": "Invalid limit or offset",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1101,7 +1111,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1110,7 +1120,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1119,7 +1129,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database error",
+                        "description": "Database unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1132,7 +1142,7 @@ const docTemplate = `{
         },
         "/tags/regions": {
             "get": {
-                "description": "Retrieves a paginated list of unique geographic regions mentioned in articles.",
+                "description": "Discover valid values for the ` + "`" + `regions` + "`" + ` filter on article endpoints.\nReturns a paginated array of unique geographic region labels (e.g. \"North America\", \"Europe\", \"India\", \"Middle East\").\n**When to use**: call before searchArticles when filtering by geography with exact, case-sensitive region strings.\n**Related tools**: listCategories, listEntities, searchArticles.",
                 "produces": [
                     "application/json"
                 ],
@@ -1140,27 +1150,28 @@ const docTemplate = `{
                     "Tags"
                 ],
                 "summary": "List geographic regions",
+                "operationId": "listRegions",
                 "parameters": [
                     {
                         "maximum": 128,
                         "minimum": 1,
                         "type": "integer",
                         "default": 16,
-                        "description": "page limit (items per page)",
+                        "description": "Page size. Default 16, max 128.",
                         "name": "limit",
                         "in": "query"
                     },
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "pagination offset (number of items to skip)",
+                        "description": "Number of items to skip. Default 0.",
                         "name": "offset",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "list of region strings",
+                        "description": "JSON array of region label strings",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -1169,10 +1180,10 @@ const docTemplate = `{
                         }
                     },
                     "204": {
-                        "description": "no data available"
+                        "description": "No regions in index (empty result, not an error)"
                     },
                     "400": {
-                        "description": "invalid pagination parameters",
+                        "description": "Invalid limit or offset",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1181,7 +1192,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized: missing or invalid API key",
+                        "description": "Missing or invalid API key",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1190,7 +1201,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "rate limit exceeded",
+                        "description": "Concurrency limit exceeded; retry shortly",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1199,7 +1210,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "database error",
+                        "description": "Database unavailable; retry",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1605,6 +1616,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "urls": {
+                    "description": "URLs lists seed article URLs to analyze for cross-outlet coverage and social mentions (1–128 items).",
                     "type": "array",
                     "minItems": 1,
                     "items": {
@@ -1618,12 +1630,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "0.8",
 	Host:             "",
 	BasePath:         "",
-	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Schemes:          []string{"https"},
+	Title:            "Beans News API & MCP",
+	Description:      "MCP-ready news aggregation and semantic search over RSS-sourced articles.\nAgent workflow: (1) listCategories, listEntities, listRegions — discover exact filter values; (2) searchArticles — primary search tool; (3) getLatestArticles, getTrendingArticles, getTopHeadlines — time-ordered feeds; (4) getPublishers — resolve source IDs; (5) getArticlePropagation / postArticlePropagation — track story spread.\nConventions: Auth optional (API-key header when enabled). Pagination: limit default 16 max 128, offset default 0. Empty results return HTTP 204 (not an error). Filter tips: start with fuzzy tags param; use exact categories/regions/entities after calling /tags/* list tools; q+acc enables semantic vector search.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
